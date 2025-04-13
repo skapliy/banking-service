@@ -1,0 +1,10 @@
+{
+  "accounts": {
+    "4074f15a-af6b-4ef0-8dd1-41b55b98a6d6": {
+      "id": "4074f15a-af6b-4ef0-8dd1-41b55b98a6d6",
+      "name": "тестовый счет",
+      "balance": 1000.0,
+      "history": []
+    }
+  }
+}
