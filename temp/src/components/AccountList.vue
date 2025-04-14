@@ -19,65 +19,44 @@
       <table class="accounts-table">
         <thead>
           <tr>
-            <th>Счет</th>
-            <th v-for="month in lastThreeMonths" :key="month">{{ month }}</th>
+            <th>Название счета</th>
             <th>Текущий баланс</th>
+            <th v-for="month in months" :key="month">{{ formatMonthName(month) }}</th>
             <th>Действия</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="account in accounts" :key="account.id">
-            <!-- Название счета с процентной ставкой -->
             <td>
-              <span 
-                class="account-name clickable" 
-                @click="showTransactions(account.id, account.name)"
-              >
+              <span class="account-name" @click="showTransactions(account.id, account.name)">
                 {{ account.name }}
-                <span 
-                  v-if="account.interest_rate !== undefined" 
-                  class="interest-rate-label"
-                >
-                  ({{ account.interest_rate }}%)
-                </span>
               </span>
             </td>
-
-            <!-- Исторические данные по месяцам -->
-            <td 
-              v-for="month in lastThreeMonths" 
-              :key="month"
-              class="historical-cell"
-            >
-              <div class="balance">
-                {{ getHistoricalBalance(account, month) }}
-              </div>
-              <div class="interest">
-                +{{ getHistoricalInterest(account, month) }}
-              </div>
-            </td>
-
-            <!-- Текущий баланс с капитализацией -->
             <td :class="{ 'negative': account.balance < 0 }">
-              <div class="balance-container">
-                {{ formatBalance(account.balance) }}
-                <div 
-                  v-if="currentMonth" 
-                  class="capitalization"
-                >
+              {{ formatBalance(account.balance) }}
+              <div class="capitalization" v-if="currentMonth">
+                <div class="capitalization-amount">
                   {{ formatBalance(calculateCapitalizedBalance(account)) }}
                 </div>
               </div>
             </td>
-
-            <!-- Действия -->
+            <td v-for="month in months" :key="month" 
+                :class="{ 'negative': (account.monthly_balances?.[month] || 0) < 0 }">
+              {{ formatBalance(account.monthly_balances?.[month]) }}
+              <div class="interest-rate" v-if="account.interest_rates?.[month]">
+                {{ account.interest_rates[month] }}%
+              </div>
+            </td>
             <td class="actions">
-              <DeleteAccount 
-                :account-id="account.id" 
-                @deleted="loadAccounts" 
-              />
-              <button
-                class="action-button"
+              <button 
+                class="action-button" 
+                @click="showTransactions(account.id, account.name)"
+                title="История транзакций"
+              >
+                📖
+              </button>
+              <button 
+                class="action-button" 
                 @click="showAddTransaction(account.id)"
                 title="Добавить транзакцию"
               >
@@ -176,13 +155,6 @@
   margin-top: 4px;
 }
 
-.interest-rate-label {
-  font-size: 0.85em;
-  color: #6c757d;
-  margin-left: 8px;
-  font-weight: 400;
-}
-
 .action-button {
   margin: 0 4px;
   padding: 6px 12px;
@@ -201,16 +173,6 @@
 
 .action-button:hover {
   background-color: #007bff;
-  color: white;
-}
-
-.action-button.delete {
-  color: #dc3545;
-  border-color: #dc3545;
-}
-
-.action-button.delete:hover {
-  background-color: #dc3545;
   color: white;
 }
 
@@ -318,38 +280,6 @@
 .account-name:hover {
   text-decoration: underline;
 }
-
-.clickable {
-  cursor: pointer;
-  color: var(--link-color);
-}
-
-.balance-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.monthly-data {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.historical-cell {
-  min-width: 120px;
-}
-
-.negative {
-  color: #dc3545;
-}
-
-.capitalization {
-  font-size: 0.9em;
-  color: #6c757d;
-}
-
-
 </style>
 
 <script>
@@ -357,15 +287,13 @@ import axios from 'axios';
 import TransactionList from './TransactionList.vue';
 import AddTransaction from './AddTransaction.vue';
 import CreateAccount from './CreateAccount.vue';
-import DeleteAccount from './DeleteAccount.vue';
 
 export default {
   name: 'AccountList',
   components: {
     TransactionList,
     AddTransaction,
-    CreateAccount,
-    DeleteAccount
+    CreateAccount
   },
   data() {
     return {
@@ -379,20 +307,6 @@ export default {
       currentMonth: null
     };
   },
-    
-  computed: {
-  lastThreeMonths() {
-    const months = [];
-    const today = new Date();
-    for (let i = 2; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      months.push(monthStr);
-    }
-    return months;
-  }
-},
-
   methods: {
     formatBalance(amount) {
       if (amount === undefined || amount === null) return '-';
@@ -401,31 +315,6 @@ export default {
         currency: 'RUB'
       }).format(amount);
     },
-
-    getHistoricalBalance(account, monthKey) { // monthKey будет "YYYY-MM"
-      const data = account.actualHistory?.[monthKey]; // Ищем по ключу
-      return data?.balance ? this.formatBalance(data.balance) : "-";
-    },
-
-    getHistoricalInterest(account, monthKey) { 
-      const data = account.actualHistory?.[monthKey];
-      return data?.interest ? this.formatBalance(data.interest) : "-";
-    },
-
-    getMonthKey(monthName) {
-  // Преобразует отображаемое имя месяца обратно в формат "YYYY-MM"
-  // Эта реализация зависит от формата monthName
-  return monthName; // Предполагая, что monthName уже в формате "YYYY-MM"
-    },
-
-    getMonthName(dateStr) {
-        const parts = dateStr.split('-');
-        const year = parts[0];
-        const month = parts[1];
-        const date = new Date(year, month - 1);
-        return date.toLocaleDateString('ru-RU', { month: 'long' });
-    },
-
     formatMonthName(monthStr) {
       const [year, month] = monthStr.split('-');
       const date = new Date(year, parseInt(month) - 1);
@@ -459,13 +348,13 @@ export default {
       this.selectedAccount = null;
     },
     calculateCapitalizedBalance(account) {
-      if (!account.interest_rate) {
+      if (!this.currentMonth || !account.interest_rates[this.currentMonth]) {
         return account.balance;
       }
-      const monthlyRate = account.interest_rate / 100 / 12;
+      const rate = account.interest_rates[this.currentMonth] / 100;
+      const monthlyRate = rate / 12;
       return account.balance * (1 + monthlyRate);
     },
-    
     async onAccountCreated() {
       this.showingCreateAccount = false;
       await this.loadAccounts();
@@ -475,7 +364,6 @@ export default {
         const response = await axios.get('/api/accounts');
         this.accounts = response.data.map(account => ({
           ...account,
-          interest_rate: account.interest_rate || 0, // <-- Исправлено
           monthly_balances: account.monthly_balances || {},
           interest_rates: account.interest_rates || {}
         }));
@@ -518,5 +406,5 @@ export default {
   async created() {
     await this.loadAccounts();
   }
-}
+};
 </script>

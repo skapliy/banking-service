@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <header>
-      <h1>Копилки</h1>
+      <h1>Банковский сервис</h1>
     </header>
     <main>
       <AccountList />

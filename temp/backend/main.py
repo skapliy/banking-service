@@ -71,19 +71,6 @@ def init_db():
         conn.execute("""
             INSERT OR IGNORE INTO interest_rates (rate, month) VALUES (0.0, ?)
         """, (current_month,))
-        
-        # Создаем или обновляем таблицу monthly_balances
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS monthly_balances (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id TEXT NOT NULL,
-                month TEXT NOT NULL,
-                balance REAL NOT NULL DEFAULT 0.0,
-                interest REAL DEFAULT 0.0,
-                FOREIGN KEY (account_id) REFERENCES accounts (id),
-                UNIQUE(account_id, month)
-            )
-        """)
         conn.commit()
 
 # Initialize database on startup
@@ -127,51 +114,8 @@ class AccountUpdate(BaseModel):
 class InterestRate(BaseModel):
     rate: float
 
-# Модель данных для исторических данных
-class HistoricalData(BaseModel):
-    month: str
-    balance: float
-    interest: float  # Начисленные проценты за месяц
-
-@app.get("/api/accounts/{account_id}/history")
-async def get_account_history(account_id: str):
-    """Get historical data for a specific account including balance and interest"""
-    try:
-        with get_db() as conn:
-            # Проверяем существование счета
-            cursor = conn.execute("SELECT id FROM accounts WHERE id = ?", (account_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Account not found")
-            
-            # Получаем исторические данные из базы данных
-            # Предполагаем, что у нас есть таблица monthly_balances с полями account_id, month, balance, interest
-            cursor = conn.execute("""
-                SELECT month, balance, interest 
-                FROM monthly_balances 
-                WHERE account_id = ? 
-                ORDER BY month DESC
-            """, (account_id,))
-            
-            history = []
-            for row in cursor.fetchall():
-                history.append({
-                    "month": row["month"],
-                    "balance": float(row["balance"]),
-                    "interest": float(row["interest"] if row["interest"] is not None else 0.0)
-                })
-            
-            return JSONResponse(
-                content=history,
-                headers={"Content-Type": "application/json; charset=utf-8"}
-            )
-            
-    except sqlite3.Error as e:
-        logging.error(f"Database error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database error")
-    except Exception as e:
-        logging.error(f"Error getting account history: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 # Global variables for interest rate
+global_interest_rate = 0.0
 
 # In-memory storage
 accounts = {}
@@ -187,20 +131,10 @@ def read_root():
 async def get_accounts():
     try:
         with get_db() as conn:
-            # Получаем текущий месяц для процентной ставки
-            current_month = datetime.now().strftime("%Y-%m")
-            
-            # Запрос с JOIN для получения ставки из interest_rates
-            cursor = conn.execute("""
-                SELECT 
-                    accounts.*, 
-                    COALESCE(interest_rates.rate, 0.0) AS current_interest_rate
-                FROM accounts
-                LEFT JOIN interest_rates 
-                    ON interest_rates.month = ?
-            """, (current_month,))
-            
+            cursor = conn.execute("SELECT * FROM accounts")
             accounts = [dict(row) for row in cursor.fetchall()]
+            
+            # Получаем транзакции за последние 3 месяца для каждого счета
             three_months_ago = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
             
             for account in accounts:
@@ -212,28 +146,25 @@ async def get_accounts():
                     ORDER BY date DESC
                     """,
                     (account['id'], three_months_ago)
-                )    
+                )
                 transactions = [dict(row) for row in cursor.fetchall()]
                 account['transactions'] = transactions
                 
-                # Добавляем текущую ставку в корень объекта аккаунта
-                account['interest_rate'] = account['current_interest_rate']
-                
-                # Рассчитываем месячные балансы
+                # Рассчитываем месячные балансы и получаем процентные ставки
                 monthly_balances = {}
                 current_date = datetime.now()
                 for i in range(3):
                     month_date = current_date - timedelta(days=30 * i)
                     month_key = month_date.strftime("%Y-%m")
                     
-                    # Ставка для исторических месяцев
+                    # Получаем процентную ставку для месяца
                     cursor = conn.execute(
                         "SELECT rate FROM interest_rates WHERE month = ?",
-                        (month_key,))
+                        (month_key,)
+                    )
                     rate_result = cursor.fetchone()
                     interest_rate = rate_result['rate'] if rate_result else 0.0
                     
-                    # Баланс за месяц
                     cursor = conn.execute(
                         """
                         SELECT SUM(amount) as total
@@ -241,7 +172,8 @@ async def get_accounts():
                         WHERE account_id = ? 
                         AND strftime('%Y-%m', date) = ?
                         """,
-                        (account['id'], month_key))
+                        (account['id'], month_key)
+                    )
                     result = cursor.fetchone()
                     monthly_balance = float(result['total'] or 0)
                     
@@ -380,77 +312,54 @@ async def get_interest_rate(month: str = None):
 @app.put("/api/interest-rate")
 async def update_interest_rate(rate: InterestRate, month: str = None):
     try:
-        # Логирование входных данных
-        logging.debug(f"Updating interest rate: rate={rate.rate}, month={month}")
-        
-        # Проверка на отрицательное значение процентной ставки
         if rate.rate < 0:
-            logging.warning(f"Attempt to set negative interest rate: {rate.rate}")
             raise HTTPException(status_code=400, detail="Interest rate cannot be negative")
-        
-        # Определение месяца, если он не указан
-        if month is None:
-            month = datetime.now().strftime("%Y-%m")
-            logging.debug(f"Month not provided, using current month: {month}")
-        
-        # Логирование перед выполнением SQL-запроса
-        logging.debug(f"Executing SQL query to update interest rate: rate={rate.rate}, month={month}")
-        
+            
         with get_db() as conn:
-            # Обновление или вставка процентной ставки в базу данных
+            if month is None:
+                month = datetime.now().strftime("%Y-%m")
+            
             conn.execute("""
                 INSERT INTO interest_rates (rate, month) 
                 VALUES (?, ?)
                 ON CONFLICT(month) DO UPDATE SET rate = excluded.rate
             """, (rate.rate, month))
             conn.commit()
-        
-        # Логирование успешного завершения операции
-        logging.info(f"Interest rate updated successfully: rate={rate.rate}, month={month}")
-        return {"message": "Interest rate updated successfully"}
-    
+            return {"message": "Interest rate updated successfully"}
     except sqlite3.Error as e:
-        # Логирование ошибки базы данных
-        logging.error(f"Database error while updating interest rate: {str(e)}")
+        logging.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error")
 
 @app.post("/api/capitalize-interest")
 def capitalize_interest():
+    global global_interest_rate
     try:
-        current_month = datetime.now().strftime("%Y-%m")
         with get_db() as conn:
-            # Получаем текущую ставку из БД
-            cursor = conn.execute(
-                "SELECT rate FROM interest_rates WHERE month = ?",
-                (current_month,)
-            )
-            rate_result = cursor.fetchone()
-            if not rate_result:
-                raise HTTPException(status_code=400, detail="Процентная ставка не установлена для текущего месяца")
-            interest_rate = rate_result['rate']
-            
-            # Обновляем балансы счетов
             cursor = conn.execute("SELECT id, balance FROM accounts")
             accounts = cursor.fetchall()
+            
             for account in accounts:
-                interest = account['balance'] * interest_rate
+                interest = account['balance'] * global_interest_rate
                 new_balance = account['balance'] + interest
+                
                 conn.execute(
                     "UPDATE accounts SET balance = ? WHERE id = ?",
                     (new_balance, account['id'])
                 )
-                # Записываем транзакцию
+                
+                # Записываем начисление процентов как транзакцию
                 transaction_id = str(uuid.uuid4())
                 conn.execute(
-                    "INSERT INTO transactions (id, account_id, amount, date, comment) VALUES (?, ?, ?, ?, ?)",
-                    (transaction_id, account['id'], interest, datetime.now().strftime('%Y-%m-%d'), 'Начисление процентов')
+                    "INSERT INTO transactions (id, account_id, amount, type, date) VALUES (?, ?, ?, ?, ?)",
+                    (transaction_id, account['id'], interest, 'interest', datetime.now().strftime('%Y-%m-%d'))
                 )
+            
             conn.commit()
-            return {"message": "Проценты успешно капитализированы"}
+            return {"message": "Interest capitalized successfully"}
     except sqlite3.Error as e:
-        logging.error(f"Ошибка БД: {str(e)}")
-        raise HTTPException(status_code=500, detail="Ошибка сервера")
-    
+        logging.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")
+
 @app.get("/api/accounts/history")
 def get_accounts_history():
     try:
@@ -459,59 +368,33 @@ def get_accounts_history():
         last_three_months = [(today - timedelta(days=30 * i)).strftime("%Y-%m") for i in range(1, 4)]
         
         accounts_history = []
-        with get_db() as conn:
-            # Получаем все аккаунты из базы данных
-            cursor = conn.execute("SELECT * FROM accounts")
-            db_accounts = [dict(row) for row in cursor.fetchall()]
+        for account in accounts.values():
+            history_data = {}
+            for month in last_three_months:
+                record = next((h for h in account.history if h["date"].startswith(month)), None)
+                history_data[month] = record["balance"] if record else "Нет данных"
             
-            for account in db_accounts:
-                history_data = {}
-                # Получаем историю транзакций для аккаунта
-                cursor = conn.execute(
-                    "SELECT * FROM transactions WHERE account_id = ? ORDER BY date DESC",
-                    (account['id'],)
-                )
-                transactions = [dict(row) for row in cursor.fetchall()]
-                
-                # Формируем историю балансов по месяцам
-                for month in last_three_months:
-                    # Фильтруем транзакции за указанный месяц
-                    monthly_transactions = [
-                        t for t in transactions 
-                        if t['date'].startswith(month)
-                    ]
-                    balance = sum(t['amount'] for t in monthly_transactions)
-                    history_data[month] = balance if balance != 0 else "Нет данных"
-                
-                # Получаем текущую процентную ставку из БД
-                current_month = today.strftime("%Y-%m")
-                cursor = conn.execute(
-                    "SELECT rate FROM interest_rates WHERE month = ?",
-                    (current_month,)
-                )
-                rate_result = cursor.fetchone()
-                interest_rate = rate_result['rate'] if rate_result else 0.0
-                
-                # Текущий баланс
-                current_balance = account['balance']
-                interest_amount = current_balance * (interest_rate / 100)
-                
-                accounts_history.append({
-                    "id": account['id'],
-                    "name": account['name'],
-                    "history": history_data,
-                    "current_month": {
-                        "balance": current_balance,
-                        "balance_with_interest": current_balance + interest_amount
-                    }
-                })
+            current_month = today.strftime("%Y-%m")
+            current_record = next((h for h in account.history if h["date"].startswith(current_month)), None)
+            current_balance = current_record["balance"] if current_record else account.balance
+            interest_amount = current_balance * (global_interest_rate / 100)
+            
+            accounts_history.append({
+                "id": account.id,
+                "name": account.name,
+                "history": history_data,
+                "current_month": {
+                    "balance": current_balance,
+                    "balance_with_interest": current_balance + interest_amount
+                }
+            })
         
         logging.info("Accounts history fetched successfully")
         return accounts_history
     except Exception as e:
         logging.error(f"Error fetching accounts history: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
 @app.post("/api/accounts/upload")
 async def upload_accounts(file: UploadFile = File(...)):
     try:
@@ -681,21 +564,3 @@ async def get_account_transactions(account_id: str, limit: Optional[int] = None)
     except Exception as e:
         logging.error(f"Error getting transactions: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
-@app.delete("/api/accounts/{account_id}")
-async def delete_account(account_id: str):
-    try:
-        with get_db() as conn:
-            # Удаляем связанные транзакции (если не настроено каскадное удаление в БД)
-            conn.execute("DELETE FROM transactions WHERE account_id = ?", (account_id,))
-            
-            # Удаляем счет
-            cursor = conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Счет не найден")
-            
-            conn.commit()
-            return {"message": "Счет успешно удален"}
-    except sqlite3.Error as e:
-        logging.error(f"Ошибка БД: {str(e)}")
-        raise HTTPException(status_code=500, detail="Ошибка сервера")    
