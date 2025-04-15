@@ -2,11 +2,17 @@
   <div class="accounts-container">
     <div class="header-row">
       <button 
-                class="action-button create-button" 
-                @click="showCreateAccount" 
-                title="Создать новый счет">
-                +
-            </button>
+          class="action-button create-button" 
+          @click="showCreateAccount" 
+          title="Создать новый счет">
+          +
+      </button>
+      <button
+        class="action-button rate-button"
+        title="Установить ставку на текущий месяц"
+        @click="showGlobalRateModal"  >
+        %
+      </button>     
     </div>
 
     <div v-if="loading" class="loading">
@@ -83,14 +89,7 @@
             </td>
 
             <td class="actions">
-               <button
-                class="action-button rate-button"
-                @click="showChangeRateModal(account)"
-                title="Изменить процентную ставку текущего месяца"
-              >
-                %
-              </button>
-              <button
+                <button
                 class="action-button transaction-button"
                 @click="showAddTransaction(account.id, account.name)"
                 title="Добавить транзакцию"
@@ -209,6 +208,28 @@
           </div>
           </div>
       </div>
+      <div v-if="showingGlobalRateModal" class="modal">
+      <div class="modal-content small"> <div class="modal-header">
+          <h3>Ставка за {{ formatMonthYear(currentMonthStr) }}</h3>
+          <button @click="closeGlobalRateModal" class="close-button">&times;</button>
+        </div>
+        <div class="change-rate-form">
+           <label for="global-rate-input">Новая ставка (%):</label>
+           <input
+              type="number"
+              id="global-rate-input"
+              v-model.number="newInterestRate" min="0"
+              step="0.01"
+              placeholder="Например, 15.00"
+            />
+            <div class="modal-actions">
+              <button @click="saveGlobalInterestRate" class="save-button">Сохранить</button>
+              <button @click="closeGlobalRateModal" class="cancel-button">Отмена</button>
+            </div>
+             <p v-if="rateChangeError" class="error">{{ rateChangeError }}</p>
+        </div>
+      </div>
+    </div>
 
     </div>
   </div>
@@ -286,7 +307,6 @@ tfoot .totals-cell .projected-balance {
     color: #007bff; /* Сохраняем цвет прогноза */
 }
 
-
 :deep(.action-button) {
   /* Основные для размера и выравнивания */
   display: inline-flex;
@@ -348,6 +368,13 @@ tfoot .totals-cell .projected-balance {
 :deep(.action-button.delete-button:hover) {
   background-color: #dc3545;
   color: white;
+}
+
+.header-row {
+  margin-bottom: 10px; /* Отступ снизу от кнопок до таблицы */
+  display: flex;       /* Выровнять кнопки в ряд */
+  text-align: center; /* Центрируем кнопки */
+  white-space: nowrap; /* Запрещаем перенос кнопок */
 }
 
 .modal-content.wide {
@@ -418,19 +445,21 @@ export default {
   },
   data() {
     return {
-      accounts: [], // Будет содержать объекты AccountDetails из API
-      loading: true,
-      error: null,
-      // --- Состояния модальных окон ---
-      showingTransactionList: false,
-      showingAddTransaction: false,
-      showingCreateAccount: false,
-      showingChangeRateModal: false,
-      // --- Данные для модальных окон ---
-      selectedAccountForModal: null, // Для показа транзакций и добавления
-      accountToChangeRate: null,     // Для изменения ставки
-      newInterestRate: null,         // V-model для инпута ставки
-      rateChangeError: null,         // Ошибка при сохранении ставки
+      accounts: [],
+    loading: true,
+    error: null,
+    // --- Состояния модальных окон ---
+    showingTransactionList: false,
+    showingAddTransaction: false,
+    showingCreateAccount: false,
+    // showingChangeRateModal: false, // <<< Удалено (или закомментировано)
+    showingGlobalRateModal: false, // <<< ДОБАВЛЕНО новое состояние
+    // --- Данные для модальных окон ---
+    selectedAccountForModal: null,
+    // accountToChangeRate: null,     // <<< Удалено (или закомментировано)
+    // Используем эти переменные для нового глобального модального окна
+    newInterestRate: null,
+    rateChangeError: null,
     };
   },
 
@@ -590,15 +619,17 @@ export default {
              : "-";
     },
 
-    // --- Управление Модальными Окнами ---
-    showTransactions(accountId, accountName) {
+// --- Управление Модальными Окнами ---
+
+showTransactions(accountId, accountName) {
       this.selectedAccountForModal = { id: accountId, name: accountName };
       this.showingTransactionList = true;
       this.showingAddTransaction = false;
       this.showingCreateAccount = false;
-      this.showingChangeRateModal = false;
+      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
+      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
     },
-     closeTransactionList() {
+    closeTransactionList() {
        this.showingTransactionList = false;
        this.selectedAccountForModal = null;
     },
@@ -609,7 +640,8 @@ export default {
       this.showingAddTransaction = true;
       this.showingTransactionList = false;
       this.showingCreateAccount = false;
-      this.showingChangeRateModal = false;
+      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
+      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
     },
     closeAddTransaction() {
       this.showingAddTransaction = false;
@@ -620,60 +652,99 @@ export default {
       this.showingCreateAccount = true;
       this.showingTransactionList = false;
       this.showingAddTransaction = false;
-      this.showingChangeRateModal = false;
+      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
+      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
       this.selectedAccountForModal = null;
     },
     closeCreateAccount() {
       this.showingCreateAccount = false;
     },
 
-    showChangeRateModal(account) {
-        this.accountToChangeRate = account;
-        // Устанавливаем текущую ставку в инпут (или null, если не задана)
-        this.newInterestRate = account.current_interest_rate !== null ? account.current_interest_rate : null;
-        this.rateChangeError = null; // Сбрасываем ошибку
-        this.showingChangeRateModal = true;
-        this.showingTransactionList = false;
-        this.showingAddTransaction = false;
-        this.showingCreateAccount = false;
+    // --- УДАЛЕНЫ методы для старого окна ставки ---
+    // showChangeRateModal(account) { ... }
+    // closeChangeRateModal() { ... }
+
+    // --- ДОБАВЛЕНЫ методы для нового глобального окна ставки ---
+    showGlobalRateModal() {
+      // Пытаемся получить текущую ставку месяца для предзаполнения поля
+      this.fetchCurrentMonthRate(); // Вызываем вспомогательный метод
+      this.rateChangeError = null; // Сбрасываем ошибку
+      this.showingGlobalRateModal = true; // Показываем окно
+
+      // Убедимся, что другие окна закрыты
+      this.showingTransactionList = false;
+      this.showingAddTransaction = false;
+      this.showingCreateAccount = false;
     },
-     closeChangeRateModal() {
-        this.showingChangeRateModal = false;
-        this.accountToChangeRate = null;
-        this.newInterestRate = null;
-         this.rateChangeError = null;
+
+    closeGlobalRateModal() {
+      this.showingGlobalRateModal = false;
+      this.newInterestRate = null; // Сбрасываем поле ввода
+      this.rateChangeError = null; // Сбрасываем ошибку
     },
 
     // --- Обработчики после действий ---
     async onActionComplete() {
       // Вызывается после добавления транзакции или создания счета
-      this.closeAddTransaction();
-      this.closeCreateAccount();
+      this.closeAddTransaction(); // Закрываем окно добавления транзакции, если было открыто
+      this.closeCreateAccount(); // Закрываем окно создания счета, если было открыто
+      // Не нужно вызывать closeGlobalRateModal здесь
       await this.loadAccounts(); // Перезагружаем список
     },
 
-    // --- Сохранение Ставки ---
-     async saveInterestRate() {
+    // --- УДАЛЕН метод сохранения старой ставки ---
+    // async saveInterestRate() { ... }
+
+    // --- ДОБАВЛЕН метод сохранения НОВОЙ ГЛОБАЛЬНОЙ ставки ---
+     async saveGlobalInterestRate() {
+        // Валидация ввода
         if (this.newInterestRate === null || this.newInterestRate === undefined || this.newInterestRate < 0) {
             this.rateChangeError = "Пожалуйста, введите корректную неотрицательную ставку.";
             return;
         }
-        if (!this.accountToChangeRate) return;
-
         this.rateChangeError = null; // Сброс ошибки перед запросом
+
         const ratePayload = { rate: this.newInterestRate };
-        const monthToUpdate = this.currentMonthStr; // Получаем текущий месяц YYYY-MM
+        // Используем currentMonthStr из computed properties
+        const monthToUpdate = this.currentMonthStr;
 
         try {
             console.log(`Sending PUT to /api/interest-rate/${monthToUpdate} with payload:`, ratePayload);
+            // Вызываем API для установки/обновления ставки на месяц
             await axios.put(`/api/interest-rate/${monthToUpdate}`, ratePayload);
-            this.closeChangeRateModal();
-            await this.loadAccounts(); // Обновляем список, чтобы увидеть новую ставку
+            this.closeGlobalRateModal(); // Закрываем окно при успехе
+            await this.loadAccounts(); // Обновляем список счетов
         } catch (error) {
-            console.error("Error updating interest rate:", error);
+            console.error("Error updating global interest rate:", error);
+            // Показываем ошибку пользователю
             this.rateChangeError = 'Ошибка при сохранении ставки: ' + (error.response?.data?.detail || error.message);
         }
     },
+
+    // --- ДОБАВЛЕН вспомогательный метод для получения текущей ставки ---
+    async fetchCurrentMonthRate() {
+        // Используем currentMonthStr из computed properties
+        const monthToFetch = this.currentMonthStr;
+        try {
+            // Используем эндпоинт GET /api/interest-rate для получения ставки
+            const response = await axios.get(`/api/interest-rate?month=${monthToFetch}`);
+            // Если API вернуло ставку, устанавливаем ее в поле ввода
+            if (response.data && response.data.rate !== null && response.data.rate !== undefined) {
+                // Преобразуем в число, т.к. API может вернуть Decimal как строку
+                this.newInterestRate = parseFloat(response.data.rate);
+            } else {
+                // Если ставка не установлена, очищаем поле
+                this.newInterestRate = null;
+            }
+        } catch (error) {
+             console.error(`Error fetching interest rate for ${monthToFetch}:`, error);
+             // При ошибке просто очищаем поле
+             this.newInterestRate = null;
+        }
+    },
+
+    // --- Метод loadAccounts() здесь не нужен, он находится ниже ---
+    // async loadAccounts() { ... }
 
     // --- Загрузка Данных ---
     async loadAccounts() {

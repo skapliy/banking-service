@@ -764,14 +764,19 @@ async def set_interest_rate_for_month(month: str, rate_in: InterestRate):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200) # Рассчитывает и сохраняет конечный баланс и начисленные проценты для ВСЕХ счетов за указанный месяц
+
+@app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200)
 async def calculate_and_store_monthly_balances(month: str):
     """
     Рассчитывает и сохраняет конечный баланс и начисленные проценты
     для ВСЕХ счетов за указанный месяц (YYYY-MM).
+    *** ТЕПЕРЬ ТАКЖЕ КАПИТАЛИЗИРУЕТ ПРОЦЕНТЫ: ***
+    - Добавляет начисленные проценты к основному балансу счета.
+    - Создает транзакцию для начисления процентов.
     Этот эндпоинт ДОЛЖЕН вызываться в начале следующего месяца
     (например, 1го апреля вызвать для марта /api/admin/calculate-monthly-balances/2025-03).
     """
-    logger.info(f"Starting calculation of monthly balances for month: {month}")
+    logger.info(f"Starting calculation and capitalization of monthly balances for month: {month}")
     try:
         # Валидация формата и проверка, что месяц не будущий
         target_month_date = datetime.strptime(month, '%Y-%m').date().replace(day=1)
@@ -780,20 +785,43 @@ async def calculate_and_store_monthly_balances(month: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM.")
 
+    # Словарь для русских названий месяцев (более надежно, чем locale)
+    months_ru = {
+        1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
+        7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
+    }
+
     accounts_processed = 0
     accounts_failed = 0
+    accounts_capitalized = 0 # Счетчик для капитализированных счетов
+
     try:
         with get_db() as conn:
-            cursor = conn.execute("SELECT id FROM accounts")
+            cursor = conn.execute("SELECT id FROM accounts") # Используем курсор для итерации
             account_ids = [row['id'] for row in cursor.fetchall()]
             logger.info(f"Found {len(account_ids)} accounts to process for month {month}")
+
+            # Определяем год и номер месяца для комментариев и даты транзакции
+            try:
+                year, month_num = map(int, month.split('-'))
+                month_name_ru = months_ru.get(month_num, f'Месяц {month_num}')
+                # Дата для транзакции - первый момент следующего месяца
+                next_month_year = year + (month_num // 12)
+                next_month_num = (month_num % 12) + 1
+                interest_transaction_date = datetime(next_month_year, next_month_num, 1, 0, 0, 0)
+                interest_transaction_date_str = interest_transaction_date.strftime('%Y-%m-%d %H:%M:%S')
+            except Exception as date_parse_err:
+                 logger.error(f"Error preparing date/comment parts for month {month}: {date_parse_err}", exc_info=True)
+                 raise HTTPException(status_code=500, detail="Internal error preparing data for interest capitalization.")
 
             for account_id in account_ids:
                 logger.debug(f"Processing account {account_id} for month {month}")
                 try:
+                    # 1. Рассчитываем проценты и конечный баланс (как раньше)
+                    # Убедимся, что функция возвращает Decimal
                     interest_accrued, end_balance = calculate_interest_for_month(conn, account_id, month)
 
-                    # Сохраняем результат в monthly_balances
+                    # 2. Сохраняем исторический результат в monthly_balances (как раньше)
                     conn.execute(
                         """
                         INSERT INTO monthly_balances (account_id, month, end_balance, interest_accrued)
@@ -804,24 +832,57 @@ async def calculate_and_store_monthly_balances(month: str):
                         """,
                         (account_id, month, end_balance, interest_accrued)
                     )
+                    logger.debug(f"Stored historical balance for {account_id}, month {month}. End Balance: {end_balance}, Interest: {interest_accrued}")
+
+                    # --- НАЧАЛО: Логика Капитализации ---
+                    if interest_accrued is not None and interest_accrued > Decimal('0.00'):
+                        logger.info(f"Capitalizing interest {interest_accrued:.2f} for account {account_id}, month {month}")
+
+                        # а. Генерируем ID для транзакции процентов
+                        interest_transaction_id = str(uuid.uuid4())
+
+                        # б. Формируем комментарий
+                        comment = f"Начисленные за {month_name_ru} {year} проценты"
+
+                        # в. Обновляем основной баланс счета (атомарно)
+                        conn.execute(
+                            "UPDATE accounts SET balance = balance + ? WHERE id = ?",
+                            (interest_accrued, account_id)
+                        )
+                        logger.debug(f"Updated account balance for {account_id} by +{interest_accrued:.2f}")
+
+                        # г. Создаем транзакцию начисления процентов
+                        conn.execute(
+                            """INSERT INTO transactions (id, account_id, amount, date, comment)
+                               VALUES (?, ?, ?, ?, ?)""",
+                            (interest_transaction_id, account_id, interest_accrued, interest_transaction_date_str, comment)
+                        )
+                        logger.debug(f"Created interest transaction {interest_transaction_id} for account {account_id}")
+                        accounts_capitalized += 1
+                    # --- КОНЕЦ: Логика Капитализации ---
+
                     accounts_processed += 1
-                    logger.debug(f"Successfully processed account {account_id} for {month}. End Balance: {end_balance}, Interest: {interest_accrued}")
 
                 except Exception as e:
                     accounts_failed += 1
-                    logger.error(f"Failed to calculate balance for account {account_id}, month {month}: {e}", exc_info=True)
-                    # Продолжаем для других счетов, но логируем ошибку
+                    # Логируем ошибку, но НЕ прерываем весь процесс, переходим к следующему счету
+                    logger.error(f"Failed to process or capitalize interest for account {account_id}, month {month}: {e}", exc_info=True)
+                    # Важно: не откатываем транзакцию здесь, чтобы успешные записи для ДРУГИХ счетов сохранились
 
-            conn.commit() # Коммитим все успешные записи
-            logger.info(f"Monthly balance calculation finished for {month}. Processed: {accounts_processed}, Failed: {accounts_failed}")
+            # Коммитим все изменения (успешно обработанные счета) ПОСЛЕ цикла
+            conn.commit()
+            logger.info(f"Monthly balance calculation & capitalization finished for {month}. Processed: {accounts_processed}, Capitalized: {accounts_capitalized}, Failed: {accounts_failed}")
             return {
-                "message": f"Monthly balances calculated for {month}.",
+                "message": f"Monthly balances calculated and interest capitalized for {month}.",
                 "processed": accounts_processed,
+                "capitalized": accounts_capitalized, # Добавили счетчик
                 "failed": accounts_failed
             }
 
     except Exception as e:
-        logger.error(f"Critical error during monthly balance calculation for {month}: {e}", exc_info=True)
+        # Эта ошибка возникла до или во время получения списка счетов, или при подготовке дат/комментариев
+        logger.error(f"Critical error during monthly balance calculation/capitalization for {month}: {e}", exc_info=True)
+        # Здесь откат произойдет автоматически при выходе из contextmanager get_db, если conn.commit() не был вызван
         raise HTTPException(status_code=500, detail=f"Internal server error during balance calculation for {month}")
 
 @app.put("/api/transactions/{transaction_id}", response_model=TransactionDB)
