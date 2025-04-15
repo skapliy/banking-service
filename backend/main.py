@@ -183,11 +183,11 @@ class AccountDetails(AccountDB):
 
 # --- Вспомогательные Функции ---
 
-def get_days_in_year(year: int) -> int:
+def get_days_in_year(year: int) -> int: # Возвращает количество дней в году (учитывает високосные)
     """Возвращает количество дней в году (учитывает високосные)."""
     return 366 if calendar.isleap(year) else 365
 
-def get_balance_at_date(conn: sqlite3.Connection, account_id: str, target_date: date) -> Decimal:
+def get_balance_at_date(conn: sqlite3.Connection, account_id: str, target_date: date) -> Decimal: # Получает баланс счета на начало указанной даты
     """
     Получает баланс счета на начало указанной даты (т.е. на конец предыдущего дня).
     """
@@ -223,7 +223,7 @@ def get_balance_at_date(conn: sqlite3.Connection, account_id: str, target_date: 
     logger.debug(f"Calculated balance at start of {target_date}: {balance}")
     return balance.quantize(TWO_PLACES, ROUND_HALF_UP)
 
-def calculate_interest_for_month(conn: sqlite3.Connection, account_id: str, month_str: str) -> tuple[Decimal, Decimal]:
+def calculate_interest_for_month(conn: sqlite3.Connection, account_id: str, month_str: str) -> tuple[Decimal, Decimal]: # Рассчитывает проценты и конечный баланс за указанный месяц
     """
     Рассчитывает проценты и конечный баланс за указанный месяц ('YYYY-MM').
     Использует ежедневный расчет баланса.
@@ -303,11 +303,8 @@ def calculate_interest_for_month(conn: sqlite3.Connection, account_id: str, mont
 def read_root():
     return {"message": "Welcome to Banking Service API V1.0"}
 
-# == Счета (Accounts) ==
-
-@app.post("/api/accounts", response_model=AccountDB, status_code=201)
+@app.post("/api/accounts", response_model=AccountDB, status_code=201) # Создание нового счета с начальным балансом и опциональной ставкой на текущий месяц.
 async def create_account_endpoint(account_in: AccountCreate): # <-- Теперь тип AccountCreate включает interest_rate
-    """Создание нового счета с начальным балансом и опциональной ставкой на текущий месяц."""
     logger.info(f"Attempting to create account: {account_in.name} with balance {account_in.balance} and rate {account_in.interest_rate}") # Добавим лог ставки
 
     # --- Проверки ---
@@ -491,9 +488,8 @@ async def get_accounts_list():
          error_detail = f"Internal server error while fetching accounts: {str(e)}"
          raise HTTPException(status_code=500, detail=error_detail)
 
-@app.get("/api/accounts/{account_id}", response_model=AccountDB)
+@app.get("/api/accounts/{account_id}", response_model=AccountDB) # Получение деталей одного счета
 async def get_account_details(account_id: str):
-    """Получение деталей одного счета."""
     logger.info(f"Fetching details for account: {account_id}")
     try:
         with get_db() as conn:
@@ -534,9 +530,8 @@ async def get_account_details(account_id: str):
         error_detail = f"Internal server error while fetching account details: {str(e)}"
         raise HTTPException(status_code=500, detail=error_detail)
 
-@app.put("/api/accounts/{account_id}", response_model=AccountDB)
+@app.put("/api/accounts/{account_id}", response_model=AccountDB) # Обновление имени счета.
 async def update_account_name(account_id: str, account_update: AccountUpdate):
-    """Обновление имени счета."""
     logger.info(f"Attempting to update name for account: {account_id}")
     if not account_update.name.strip():
         raise HTTPException(status_code=400, detail="Account name cannot be empty")
@@ -559,9 +554,8 @@ async def update_account_name(account_id: str, account_update: AccountUpdate):
         logger.error(f"Error updating account {account_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.delete("/api/accounts/{account_id}", status_code=200)
+@app.delete("/api/accounts/{account_id}", status_code=200) # Удаление счета и всех связанных данных (транзакции, история)
 async def delete_account_endpoint(account_id: str):
-    """Удаление счета и всех связанных данных (транзакции, история)."""
     logger.info(f"Attempting to delete account: {account_id}")
     try:
         with get_db() as conn:
@@ -579,11 +573,8 @@ async def delete_account_endpoint(account_id: str):
         logger.error(f"Error deleting account {account_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# == Транзакции (Transactions) ==
-
-@app.post("/api/transactions", status_code=201)
+@app.post("/api/transactions", status_code=201) # Создание новой транзакции
 async def create_transaction_endpoint(transaction_in: TransactionCreate):
-    """Создание новой транзакции."""
     logger.info(f"Attempting to create transaction for account: {transaction_in.account_id}")
     account_id = transaction_in.account_id
     amount = transaction_in.amount.quantize(TWO_PLACES, ROUND_HALF_UP)
@@ -642,10 +633,8 @@ async def create_transaction_endpoint(transaction_in: TransactionCreate):
         logger.error(f"Error creating transaction for account {account_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@app.get("/api/accounts/{account_id}/transactions", response_model=List[TransactionDB]) # response_model уже правильный
+@app.get("/api/accounts/{account_id}/transactions", response_model=List[TransactionDB]) # Получение списка всех транзакций для счета (включая начальный остаток)
 async def get_account_transactions_endpoint(account_id: str, limit: Optional[int] = None):
-    """Получение списка всех транзакций для счета (включая начальный остаток)."""
     logger.info(f"Fetching transactions for account: {account_id}, limit: {limit}")
     try:
         with get_db() as conn:
@@ -692,11 +681,9 @@ async def get_account_transactions_endpoint(account_id: str, limit: Optional[int
         # Формируем общее сообщение
         error_detail = f"Internal server error while fetching transactions: {str(e)}"
         raise HTTPException(status_code=500, detail=error_detail)
-# == Процентные ставки (Interest Rates) ==
 
-@app.get("/api/interest-rate")
+@app.get("/api/interest-rate") # Получение процентной ставки для указанного месяца (YYYY-MM) или текущего.
 async def get_interest_rate_endpoint(month: Optional[str] = None):
-    """Получение процентной ставки для указанного месяца (YYYY-MM) или текущего."""
     target_month = month if month else datetime.now().strftime('%Y-%m')
     logger.info(f"Fetching interest rate for month: {target_month}")
     try:
@@ -716,8 +703,7 @@ async def get_interest_rate_endpoint(month: Optional[str] = None):
         logger.error(f"Error fetching interest rate for {target_month}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@app.put("/api/interest-rate/{month}", status_code=200)
+@app.put("/api/interest-rate/{month}", status_code=200) # Установка или обновление процентной ставки для КОНКРЕТНОГО месяца
 async def set_interest_rate_for_month(month: str, rate_in: InterestRate):
     """
     Установка или обновление процентной ставки для КОНКРЕТНОГО месяца (YYYY-MM).
@@ -757,10 +743,7 @@ async def set_interest_rate_for_month(month: str, rate_in: InterestRate):
         logger.error(f"Error setting interest rate for {month}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-# == Административные Функции ==
-
-@app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200)
+@app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200) # Рассчитывает и сохраняет конечный баланс и начисленные проценты для ВСЕХ счетов за указанный месяц
 async def calculate_and_store_monthly_balances(month: str):
     """
     Рассчитывает и сохраняет конечный баланс и начисленные проценты
@@ -820,7 +803,6 @@ async def calculate_and_store_monthly_balances(month: str):
     except Exception as e:
         logger.error(f"Critical error during monthly balance calculation for {month}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error during balance calculation for {month}")
-
 
 # --- Запуск приложения (для локальной разработки) ---
 if __name__ == "__main__":
