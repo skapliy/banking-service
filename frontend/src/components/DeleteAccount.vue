@@ -1,9 +1,12 @@
 <template>
-  <button class="delete-button" @click="showConfirmationModal">
-    ✖
+  <button
+    class="action-button delete-button"
+    @click="showConfirmationModal"
+    title="Удалить счет"
+  >
+  ✖
   </button>
 
-  <!-- Модальное окно -->
   <div v-if="isModalVisible" class="confirmation-modal">
     <div class="modal-content">
       <p>Вы уверены, что хотите удалить счет?</p>
@@ -13,7 +16,7 @@
       </div>
     </div>
   </div>
-</template>
+</template> ```
 
 <script>
 import axios from '@/axios-config';
@@ -54,26 +57,6 @@ export default {
 </script>
 
 <style scoped>
-.delete-button {
-  background: none;
-  border: 1px solid #dc3545;
-  color: #dc3545;
-  border-radius: 4px;
-  padding: 6px 12px;
-  cursor: pointer;
-  margin: 0 4px;
-  font-size: 1.1em;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.delete-button:hover {
-  background-color: #dc3545;
-  color: white;
-}
-
-.delete-button:active {
-  transform: scale(0.98);
-}
 
 /* Стили для модального окна */
 .confirmation-modal {

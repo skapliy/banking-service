@@ -60,7 +60,7 @@ export default {
     return {
       name: '',
       balance: '',
-      interestRate: '0.0'
+      interestRate: 0.0
     };
   },
   computed: {
