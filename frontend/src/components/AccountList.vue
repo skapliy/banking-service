@@ -184,30 +184,6 @@
         </div>
       </div>
 
-      <div v-if="showingChangeRateModal" class="modal">
-        <div class="modal-content small">
-           <div class="modal-header">
-            <h3>Ставка за {{ formatMonthYear(currentMonthStr) }} для {{ accountToChangeRate?.name }}</h3>
-            <button @click="closeChangeRateModal" class="close-button">&times;</button>
-          </div>
-          <div class="change-rate-form">
-             <label :for="'rate-input-' + accountToChangeRate?.id">Новая ставка (%):</label>
-             <input
-                type="number"
-                :id="'rate-input-' + accountToChangeRate?.id"
-                v-model.number="newInterestRate"
-                min="0"
-                step="0.01"
-                placeholder="Например, 15.00"
-              />
-              <div class="modal-actions">
-                <button @click="saveInterestRate" class="save-button">Сохранить</button>
-                <button @click="closeChangeRateModal" class="cancel-button">Отмена</button>
-              </div>
-               <p v-if="rateChangeError" class="error">{{ rateChangeError }}</p>
-          </div>
-          </div>
-      </div>
       <div v-if="showingGlobalRateModal" class="modal">
       <div class="modal-content small"> <div class="modal-header">
           <h3>Ставка за {{ formatMonthYear(currentMonthStr) }}</h3>
@@ -441,23 +417,17 @@ export default {
     AddTransaction,
     CreateAccount,
     DeleteAccount,
-    // ChangeInterestRate // Раскомментировать, если используется отдельный компонент
   },
   data() {
     return {
       accounts: [],
     loading: true,
     error: null,
-    // --- Состояния модальных окон ---
     showingTransactionList: false,
     showingAddTransaction: false,
     showingCreateAccount: false,
-    // showingChangeRateModal: false, // <<< Удалено (или закомментировано)
-    showingGlobalRateModal: false, // <<< ДОБАВЛЕНО новое состояние
-    // --- Данные для модальных окон ---
+    showingGlobalRateModal: false,
     selectedAccountForModal: null,
-    // accountToChangeRate: null,     // <<< Удалено (или закомментировано)
-    // Используем эти переменные для нового глобального модального окна
     newInterestRate: null,
     rateChangeError: null,
     };
@@ -477,7 +447,7 @@ export default {
         const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         months.push(monthStr);
       }
-      console.log("Previous months keys:", months); // Для отладки
+  //    console.log("Previous months keys:", months); // Для отладки
       return months;
     },
     /**
@@ -626,8 +596,7 @@ showTransactions(accountId, accountName) {
       this.showingTransactionList = true;
       this.showingAddTransaction = false;
       this.showingCreateAccount = false;
-      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
-      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
+      this.showingGlobalRateModal = false; 
     },
     closeTransactionList() {
        this.showingTransactionList = false;
@@ -640,8 +609,7 @@ showTransactions(accountId, accountName) {
       this.showingAddTransaction = true;
       this.showingTransactionList = false;
       this.showingCreateAccount = false;
-      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
-      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
+      this.showingGlobalRateModal = false; 
     },
     closeAddTransaction() {
       this.showingAddTransaction = false;
@@ -652,8 +620,7 @@ showTransactions(accountId, accountName) {
       this.showingCreateAccount = true;
       this.showingTransactionList = false;
       this.showingAddTransaction = false;
-      // this.showingChangeRateModal = false; // Старое - удаляем или комментируем
-      this.showingGlobalRateModal = false; // << ИЗМЕНЕНО: Закрываем новое окно
+      this.showingGlobalRateModal = false; 
       this.selectedAccountForModal = null;
     },
     closeCreateAccount() {
@@ -692,10 +659,6 @@ showTransactions(accountId, accountName) {
       await this.loadAccounts(); // Перезагружаем список
     },
 
-    // --- УДАЛЕН метод сохранения старой ставки ---
-    // async saveInterestRate() { ... }
-
-    // --- ДОБАВЛЕН метод сохранения НОВОЙ ГЛОБАЛЬНОЙ ставки ---
      async saveGlobalInterestRate() {
         // Валидация ввода
         if (this.newInterestRate === null || this.newInterestRate === undefined || this.newInterestRate < 0) {
