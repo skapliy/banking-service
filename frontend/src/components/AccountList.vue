@@ -102,6 +102,42 @@
             </td>
           </tr>
         </tbody>
+        <tfoot>
+          <tr class="totals-row">
+            <td><strong>Итого:</strong></td>
+
+            <td
+              v-for="monthKey in lastThreeMonths"
+              :key="monthKey + '-total'"
+              class="historical-cell totals-cell"
+            >
+              <div v-if="totalsByMonth[monthKey]" class="monthly-data">
+                <div class="balance" title="Сумма остатков на конец месяца">
+                    {{ formatBalance(totalsByMonth[monthKey].totalEndBalance) }}
+                </div>
+                <div class="interest" title="Сумма начисленных процентов за месяц">
+                    +{{ formatBalance(totalsByMonth[monthKey].totalInterestAccrued) }}
+                </div>
+              </div>
+               <div v-else class="monthly-data-na">-</div>
+            </td>
+
+            <td class="totals-cell">
+                <div class="balance-container">
+                    <div class="actual-balance" title="Сумма текущих балансов">
+                        {{ formatBalance(currentPeriodTotals.totalCurrentBalance) }}
+                    </div>
+                    <div class="projected-balance" title="Сумма прогнозируемых балансов на конец месяца">
+                        {{ formatBalance(currentPeriodTotals.totalProjectedEomBalance) }}
+                    </div>
+                </div>
+            </td>
+
+            <td></td>
+          </tr>
+        </tfoot>
+
+
       </table>
 
       <div v-if="showingTransactionList" class="modal">
@@ -177,7 +213,6 @@
 </template>
 
 <style scoped>
-/* ... ваши существующие стили ... */
 
 /* Дополнительные или измененные стили */
 .accounts-table th,
@@ -228,10 +263,28 @@
     white-space: nowrap; /* Запрещаем перенос кнопок */
 }
 
-/* Внутри <style scoped> файла AccountList.vue */
+tfoot .totals-row td {
+  font-weight: bold; /* Жирный шрифт для итогов */
+  border-top: 2px solid #dee2e6; /* Жирная линия сверху */
+  background-color: #f8f9fa; /* Слегка другой фон */
+}
 
-/* ---> ИЗМЕНЕНИЕ: Добавляем :deep() к БАЗОВОМУ классу <--- */
-/* Это должно заставить размер и отступы примениться и к кнопкам в дочерних компонентах */
+tfoot .totals-cell {
+    text-align: right;
+}
+tfoot .totals-cell .balance-container,
+tfoot .totals-cell .monthly-data {
+    text-align: right; /* Убедимся, что числа справа */
+}
+
+tfoot .totals-cell .monthly-data .interest {
+     color: #28a745; /* Сохраняем цвет процентов */
+}
+tfoot .totals-cell .projected-balance {
+    color: #007bff; /* Сохраняем цвет прогноза */
+}
+
+
 :deep(.action-button) {
   /* Основные для размера и выравнивания */
   display: inline-flex;
@@ -256,8 +309,6 @@
   transition: background-color 0.2s, color 0.2s;
   overflow: hidden;
 }
-/* ---> КОНЕЦ ИЗМЕНЕНИЯ <--- */
-
 
 /* Стили для кнопки изменения ставки (%) - БЕЗ :deep(), т.к. кнопка в этом же компоненте */
 .action-button.rate-button {
@@ -288,8 +339,6 @@
   background-color: #dc3545;
   color: white;
 }
-
-/* ... остальные стили ... */
 
 .modal-content.wide {
     max-width: 90%; /* Шире для списка транзакций */
@@ -398,7 +447,64 @@ export default {
     currentMonthStr() {
         const today = new Date();
         return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    /**
+     * Рассчитывает общие суммы для текущего периода.
+     * @returns {{ totalCurrentBalance: number, totalProjectedEomBalance: number }}
+     */
+     currentPeriodTotals() {
+      return this.accounts.reduce((totals, account) => {
+        // Суммируем текущий баланс
+        const currentBalance = parseFloat(account.current_period?.current_balance || 0);
+        totals.totalCurrentBalance += isNaN(currentBalance) ? 0 : currentBalance;
+
+        // Суммируем прогнозируемый баланс
+        const projectedBalance = parseFloat(account.current_period?.projected_eom_balance || 0);
+        totals.totalProjectedEomBalance += isNaN(projectedBalance) ? 0 : projectedBalance;
+
+        return totals;
+      }, { totalCurrentBalance: 0, totalProjectedEomBalance: 0 }); // Начальные значения сумм
+    },
+
+    /**
+     * Рассчитывает общие суммы для каждого из предыдущих месяцев.
+     * @returns {Object.<string, { totalEndBalance: number, totalInterestAccrued: number }>}
+     * Пример: { "2025-03": { totalEndBalance: 15000, totalInterestAccrued: 150.50 }, ... }
+     */
+    totalsByMonth() {
+      const monthlyTotals = {};
+      // Инициализируем объект для каждого месяца из заголовков
+      this.lastThreeMonths.forEach(monthKey => {
+        monthlyTotals[monthKey] = { totalEndBalance: 0, totalInterestAccrued: 0 };
+      });
+
+      // Проходим по всем счетам
+      this.accounts.forEach(account => {
+        // Проходим по месяцам, для которых есть ключи в итогах
+        this.lastThreeMonths.forEach(monthKey => {
+          const monthData = account.previous_months?.[monthKey]; // Безопасный доступ
+          if (monthData) {
+            // Суммируем баланс на конец месяца
+            const endBalance = parseFloat(monthData.end_balance || 0);
+            monthlyTotals[monthKey].totalEndBalance += isNaN(endBalance) ? 0 : endBalance;
+
+            // Суммируем начисленные проценты
+            const interestAccrued = parseFloat(monthData.interest_accrued || 0);
+            monthlyTotals[monthKey].totalInterestAccrued += isNaN(interestAccrued) ? 0 : interestAccrued;
+          }
+        });
+      });
+
+        // Округляем итоговые суммы до 2 знаков после запятой (опционально, но желательно)
+        Object.keys(monthlyTotals).forEach(monthKey => {
+            monthlyTotals[monthKey].totalEndBalance = parseFloat(monthlyTotals[monthKey].totalEndBalance.toFixed(2));
+            monthlyTotals[monthKey].totalInterestAccrued = parseFloat(monthlyTotals[monthKey].totalInterestAccrued.toFixed(2));
+        });
+
+      return monthlyTotals;
     }
+
   },
 
   methods: {

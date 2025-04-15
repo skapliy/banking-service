@@ -16,16 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# Импорты вашего приложения/локальные модули (пример)
-# (Раскомментируйте и адаптируйте под вашу структуру проекта)
-# from .config import logger, TWO_PLACES       # Пример: Логгер, константы
-# from .database import get_db                 # Пример: Контекстный менеджер БД
-# from .models import (                      # Пример: Pydantic модели
-#     AccountBase, AccountCreate, AccountDB, AccountDetails, AccountUpdate,
-#     CurrentPeriodData, InterestRate, PreviousMonthData,
-#     TransactionBase, TransactionCreate, TransactionDB
-# )
-
 # Настройка логирования
 logging.basicConfig(
     level=logging.DEBUG,
@@ -391,12 +381,6 @@ async def create_account_endpoint(account_in: AccountCreate): # <-- Теперь
     except Exception as e:
         logger.error(f"Unexpected error during account creation endpoint execution for {account_in.name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error during account creation.")
-# Стандартные библиотеки (отсортированы по алфавиту)
-# ... (все ваши импорты остаются как есть) ...
-
-# --- FastAPI приложение и остальной код ---
-# ... (определение app, CORS, БД, модели и т.д.) ...
-
 
 @app.get("/api/accounts", response_model=List[AccountDetails]) # Указываем модель ответа
 async def get_accounts_list():
