@@ -1,10 +1,27 @@
 <template>
   <div class="accounts-container">
     <div class="header-row">
-      <h2>Список счетов</h2>
-      <button class="create-account-button" @click="showCreateAccount" title="Создать новый счет">
-        <span class="plus-icon">+</span>
-      </button>
+      <table>
+        <tbody>
+          <td>
+            <button 
+                class="action-button create-button" 
+                @click="showCreateAccount" 
+                title="Создать новый счет">
+                +
+            </button>
+          </td>
+          <td>
+            <button
+                class="action-button rate-button"
+                @click="showChangeRateModal(account)"
+                title="Изменить процентную ставку текущего месяца"
+              > %
+              </button>
+          </td>
+        </tbody>
+      </table> 
+
     </div>
 
     <div v-if="loading" class="loading">
@@ -143,7 +160,7 @@
       <div v-if="showingTransactionList" class="modal">
         <div class="modal-content wide">
           <div class="modal-header">
-            <h3>Транзакции: {{ selectedAccountForModal?.name }}</h3>
+            <h4>Транзакции: {{ selectedAccountForModal?.name }}</h4>
             <button @click="closeTransactionList" class="close-button">&times;</button>
           </div>
           <TransactionList
@@ -296,11 +313,11 @@ tfoot .totals-cell .projected-balance {
   box-sizing: border-box;  /* Важно */
 
   /* Вспомогательные для внешнего вида */
-  margin: 0 3px;
+  margin: 0 2px;
   border: 1px solid;
-  border-radius: 4px;
+  border-radius: 1px;
   background-color: white;
-  font-size: 1.1em;
+  font-size: 2em;
   font-weight: bold;
   line-height: 1;
   text-align: center;
@@ -320,7 +337,15 @@ tfoot .totals-cell .projected-balance {
   color: white;
 }
 
-/* Стили для кнопки добавления транзакции (±) - БЕЗ :deep() */
+.action-button.create-button {
+  border-color: #07ff77;
+  color: #07ff77;
+}
+.action-button.create-button:hover {
+  background-color: #07ff77;
+  color: white;
+}
+
 .action-button.transaction-button {
   border-color: #17a2b8;
   color: #17a2b8;
@@ -341,10 +366,10 @@ tfoot .totals-cell .projected-balance {
 }
 
 .modal-content.wide {
-    max-width: 90%; /* Шире для списка транзакций */
+    max-width: 70%; /* Шире для списка транзакций */
 }
 .modal-content.small {
-    max-width: 400px; /* Узкое для изменения ставки */
+    max-width: 300px; /* Узкое для изменения ставки */
 }
 .change-rate-form {
     display: flex;
