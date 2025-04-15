@@ -153,7 +153,7 @@
             :account-id="selectedAccountForModal.id"
             :account-name="selectedAccountForModal.name"
             @close="closeTransactionList"
-          />
+            @transactions-updated="handleTransactionsUpdate" />
         </div>
       </div>
 
@@ -531,6 +531,11 @@ export default {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       }).format(numAmount);
+    },
+
+    handleTransactionsUpdate() {
+        console.log("Transaction list updated, reloading accounts...");
+        this.loadAccounts(); // Перезагружаем список счетов для обновления баланса
     },
 
     /**

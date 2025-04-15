@@ -181,6 +181,10 @@ class AccountDetails(AccountDB):
     previous_months: Dict[str, Optional[PreviousMonthData]] # {"YYYY-MM": PreviousMonthData | null}
     current_period: CurrentPeriodData
 
+class TransactionUpdate(BaseModel):
+    amount: Optional[Decimal] = None # Сумма опциональна
+    date: Optional[str] = None      # Дата опциональна (YYYY-MM-DD)
+    comment: Optional[str] = None   # Комментарий тоже можно обновлять
 # --- Вспомогательные Функции ---
 
 def get_days_in_year(year: int) -> int: # Возвращает количество дней в году (учитывает високосные)
@@ -530,14 +534,16 @@ async def get_account_details(account_id: str):
         error_detail = f"Internal server error while fetching account details: {str(e)}"
         raise HTTPException(status_code=500, detail=error_detail)
 
-@app.put("/api/accounts/{account_id}", response_model=AccountDB) # Обновление имени счета.
+@app.put("/api/accounts/{account_id}", response_model=AccountDB)
 async def update_account_name(account_id: str, account_update: AccountUpdate):
+    """Обновление имени счета."""
     logger.info(f"Attempting to update name for account: {account_id}")
     if not account_update.name.strip():
         raise HTTPException(status_code=400, detail="Account name cannot be empty")
     try:
         with get_db() as conn:
-            cursor = conn.execute(
+            cursor = conn.cursor() # Используем курсор
+            cursor.execute(
                 "UPDATE accounts SET name = ? WHERE id = ?",
                 (account_update.name.strip(), account_id)
             )
@@ -546,10 +552,24 @@ async def update_account_name(account_id: str, account_update: AccountUpdate):
                 raise HTTPException(status_code=404, detail="Account not found")
             conn.commit()
             logger.info(f"Account name updated for: {account_id}")
-            # Возвращаем обновленный аккаунт
-            cursor = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,))
-            updated_account = cursor.fetchone()
-            return updated_account
+
+            # Получаем и возвращаем обновленный аккаунт (валидированный)
+            cursor.execute("SELECT id, name, balance FROM accounts WHERE id = ?", (account_id,)) # Выбираем нужные поля
+            updated_account_row = cursor.fetchone()
+            if updated_account_row:
+                 try:
+                     account_dict = dict(updated_account_row) # Конвертируем в dict
+                     validated_account = AccountDB.model_validate(account_dict) # Валидируем dict
+                     return validated_account # Возвращаем Pydantic модель
+                 except Exception as validation_err:
+                     logger.error(f"Pydantic validation failed for updated account {account_id}: {validation_err}", exc_info=True)
+                     raise HTTPException(status_code=500, detail="Failed to validate updated account data for response.")
+            else:
+                 logger.error(f"Failed to fetch updated account {account_id}")
+                 raise HTTPException(status_code=500, detail="Failed to retrieve updated account.")
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating account {account_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -803,6 +823,138 @@ async def calculate_and_store_monthly_balances(month: str):
     except Exception as e:
         logger.error(f"Critical error during monthly balance calculation for {month}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error during balance calculation for {month}")
+
+@app.put("/api/transactions/{transaction_id}", response_model=TransactionDB)
+async def update_transaction_endpoint(transaction_id: str, transaction_update: TransactionUpdate):
+    """Обновление существующей транзакции (сумма, дата, комментарий)."""
+    logger.info(f"Attempting to update transaction: {transaction_id}")
+
+    # --- Валидация входных данных и подготовка значений ---
+    if transaction_update.amount is None and transaction_update.date is None and transaction_update.comment is None:
+        raise HTTPException(status_code=400, detail="No fields provided for update.")
+
+    new_amount_decimal: Optional[Decimal] = None
+    if transaction_update.amount is not None:
+        new_amount_decimal = transaction_update.amount.quantize(TWO_PLACES, ROUND_HALF_UP)
+
+    new_date_str_for_update: Optional[str] = None # Отформатированная дата для ЗАПИСИ в БД
+    if transaction_update.date:
+        try:
+            new_date_part = datetime.strptime(transaction_update.date, '%Y-%m-%d').date()
+            if new_date_part > date.today():
+                 raise HTTPException(status_code=400, detail="Transaction date cannot be in the future")
+            # Форматируем для записи в БД (если у вас там datetime)
+            new_date_str_for_update = datetime.combine(new_date_part, datetime.min.time()).strftime('%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    new_comment = transaction_update.comment # Может быть None или ""
+
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            # 1. Найти текущую транзакцию (чтобы получить account_id, old_amount и оригинальные date/comment)
+            cursor.execute("SELECT account_id, amount, date, comment FROM transactions WHERE id = ?", (transaction_id,))
+            current_transaction_row = cursor.fetchone()
+            if not current_transaction_row:
+                raise HTTPException(status_code=404, detail="Transaction not found")
+
+            account_id = current_transaction_row['account_id']
+            old_amount = Decimal(current_transaction_row['amount'])
+            original_db_date_str = current_transaction_row['date'] # Сохраняем исходную дату/время из БД
+            original_db_comment = current_transaction_row['comment'] # Сохраняем исходный коммент
+
+            # 2. Определить итоговые значения для записи в БД
+            final_amount = new_amount_decimal if new_amount_decimal is not None else old_amount
+            final_date_str_for_db = new_date_str_for_update if new_date_str_for_update is not None else original_db_date_str
+            final_comment = new_comment if new_comment is not None else original_db_comment
+
+            # 3. Рассчитать разницу в сумме для обновления баланса счета
+            amount_difference = final_amount - old_amount
+            logger.debug(f"Updating transaction {transaction_id}. Diff: {amount_difference}")
+
+            # --- Обновления в БД ---
+            # 4. Обновить транзакцию
+            cursor.execute(
+                "UPDATE transactions SET amount = ?, date = ?, comment = ? WHERE id = ?",
+                (final_amount, final_date_str_for_db, final_comment, transaction_id)
+            )
+            # 5. Обновить баланс счета, если сумма изменилась
+            if amount_difference != Decimal('0.00'):
+                cursor.execute(
+                    "UPDATE accounts SET balance = balance + ? WHERE id = ?",
+                    (amount_difference, account_id)
+                )
+            conn.commit()
+            # --- Обновления в БД Завершены ---
+
+            logger.info(f"Transaction {transaction_id} updated successfully in DB.")
+
+            # --- Формирование Ответа --- <<< ИЗМЕНЕНИЕ ЛОГИКИ ЗДЕСЬ
+            # Не читаем заново из БД, а создаем объект Pydantic из известных данных
+            try:
+                # Создаем экземпляр TransactionDB напрямую
+                response_data = TransactionDB(
+                    id=transaction_id,           # ID из параметра пути
+                    account_id=account_id,       # ID счета, который мы получили ранее
+                    amount=final_amount,         # Итоговая сумма, которую записали в БД
+                    date=final_date_str_for_db,  # Итоговая дата (строка), которую записали
+                    comment=final_comment        # Итоговый комментарий, который записали
+                )
+                logger.debug(f"Constructed response object: {response_data}")
+                # Возвращаем готовый Pydantic объект, FastAPI его сериализует
+                return response_data
+            except Exception as response_build_err:
+                 # На случай ошибки сборки Pydantic объекта (хотя не должно)
+                 logger.error(f"Failed to build response object for transaction {transaction_id}: {response_build_err}", exc_info=True)
+                 raise HTTPException(status_code=500, detail="Internal error constructing transaction response.")
+            # --- Конец Формирования Ответа ---
+
+    except HTTPException:
+        raise # Пробрасываем HTTP ошибки
+    except Exception as e:
+        logger.error(f"Error updating transaction {transaction_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during transaction update.")    
+@app.delete("/api/transactions/{transaction_id}", status_code=200) # Можно 204 No Content, но 200 с сообщением тоже ок
+async def delete_transaction_endpoint(transaction_id: str):
+    """Удаление транзакции и корректировка баланса счета."""
+    logger.info(f"Attempting to delete transaction: {transaction_id}")
+
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            # 1. Найти транзакцию, чтобы получить ее сумму и ID счета
+            cursor.execute("SELECT account_id, amount FROM transactions WHERE id = ?", (transaction_id,))
+            transaction_to_delete = cursor.fetchone()
+
+            if not transaction_to_delete:
+                raise HTTPException(status_code=404, detail="Transaction not found")
+
+            account_id = transaction_to_delete['account_id']
+            amount_to_reverse = Decimal(transaction_to_delete['amount'])
+            logger.debug(f"Found transaction {transaction_id} for account {account_id} with amount {amount_to_reverse}")
+
+            # 2. Скорректировать баланс счета АТОМАРНО (вычитаем сумму удаляемой транзакции)
+            logger.debug(f"Updating account {account_id} balance by {-amount_to_reverse}")
+            cursor.execute(
+                "UPDATE accounts SET balance = balance - ? WHERE id = ?",
+                (amount_to_reverse, account_id)
+            )
+
+            # 3. Удалить саму транзакцию
+            cursor.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+
+            conn.commit()
+            logger.info(f"Transaction {transaction_id} deleted successfully.")
+            return {"message": "Transaction deleted successfully"}
+
+    except HTTPException:
+        raise # Пробрасываем HTTP ошибки
+    except Exception as e:
+        logger.error(f"Error deleting transaction {transaction_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during transaction deletion.")
 
 # --- Запуск приложения (для локальной разработки) ---
 if __name__ == "__main__":
