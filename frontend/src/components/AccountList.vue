@@ -1,27 +1,12 @@
 <template>
   <div class="accounts-container">
     <div class="header-row">
-      <table>
-        <tbody>
-          <td>
-            <button 
+      <button 
                 class="action-button create-button" 
                 @click="showCreateAccount" 
                 title="Создать новый счет">
                 +
             </button>
-          </td>
-          <td>
-            <button
-                class="action-button rate-button"
-                @click="showChangeRateModal(account)"
-                title="Изменить процентную ставку текущего месяца"
-              > %
-              </button>
-          </td>
-        </tbody>
-      </table> 
-
     </div>
 
     <div v-if="loading" class="loading">
