@@ -24,7 +24,7 @@
             <template v-if="editingTransactionId !== tx.id">
               <td>{{ formatDateForDisplay(tx.date) }}</td>
               <td :class="{ 'deposit': tx.amount > 0, 'withdrawal': tx.amount < 0 }">
-                  {{ formatCurrency(tx.amount)}} <small>({{ formatCurrency(tx.interestAccrued) }})</small>
+                  {{ formatCurrency(tx.amount)}}
               </td>
               <td>{{ tx.comment }}</td>
               <td>
