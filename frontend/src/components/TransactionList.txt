@@ -24,7 +24,7 @@
             <template v-if="editingTransactionId !== tx.id">
               <td>{{ formatDateForDisplay(tx.date) }}</td>
               <td :class="{ 'deposit': tx.amount > 0, 'withdrawal': tx.amount < 0 }">
-                  {{ formatCurrency(tx.amount)}} <small>({{ formatCurrency(tx.interestAccrued) }})</small>
+                {{ formatCurrency(tx.amount)}} <small>({{ formatCurrency(tx.interestAccrued) }})</small> <!-- Выводим сумму и проценты -->
               </td>
               <td>{{ tx.comment }}</td>
               <td>
@@ -118,28 +118,30 @@ export default {
 
     // --- Форматирование ---
     formatDateForDisplay(dateString) {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        // Формат для отображения
-        return date.toLocaleDateString('ru-RU', {
-          year: 'numeric', month: 'numeric', day: 'numeric' // Краткий формат даты
-        });
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      // Формат для отображения
+      return date.toLocaleDateString('ru-RU', {
+        year: 'numeric', month: 'numeric', day: 'numeric' // Краткий формат даты
+      });
     },
-    formatDateForInput(dateString) {
+     formatDateForInput(dateString) {
         if (!dateString) return '';
         // Преобразуем 'YYYY-MM-DD HH:MM:SS' в 'YYYY-MM-DD' для input type="date"
         return dateString.substring(0, 10);
     },
     formatCurrency(amount) {
-        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-        if (numAmount === undefined || numAmount === null || isNaN(numAmount)) return '0.00'; // Или "-"
-        return new Intl.NumberFormat('ru-RU', {
-            style: 'decimal',                          // Обычный числовой формат
-            minimumFractionDigits: 2,                  // Всегда отображаем 2 знака после запятой
-            maximumFractionDigits: 2,                  // Максимум 2 знака после запятой
-            useGrouping: true                          // Включаем группировку разрядов (1 234 567,89)
-        }).format(numAmount);
-    },
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (numAmount === undefined || numAmount === null || isNaN(numAmount)) return '0.00'; // Или '-'
+
+  // Используем numeric формат вместо currency, чтобы убрать символ рубля
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'decimal',                          // Обычный числовой формат
+    minimumFractionDigits: 2,                  // Всегда отображаем 2 знака после запятой
+    maximumFractionDigits: 2,                  // Максимум 2 знака после запятой
+    useGrouping: true                          // Включаем группировку разрядов (1 234 567,89)
+  }).format(numAmount);
+},
 
     // --- Методы Редактирования ---
     startEdit(transaction) {
