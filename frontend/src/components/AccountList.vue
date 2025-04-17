@@ -615,11 +615,9 @@ export default {
       accounts: [],
     loading: true,
     error: null,
-    // showingTransactionList: false,
     showingAddTransaction: false,
     showingCreateAccount: false,
     showingGlobalRateModal: false,
-    // selectedAccountForModal: null,
     expandedAccountId: null, // ID аккаунта, чьи транзакции сейчас показаны, null если все свернуты
     newInterestRate: null,
     rateChangeError: null,
@@ -710,9 +708,6 @@ export default {
   },
 
   methods: {
-    /**
-     * Форматирует число как валюту RUB.
-     */
 formatBalance(amount) {
     // Преобразуем в число, если это строка (API может вернуть Decimal как строку)
     const numAmount = (typeof amount === 'string') ? parseFloat(amount) : amount;
@@ -782,16 +777,6 @@ formatBalance(amount) {
              : "-";
     },
 
-// --- Управление Модальными Окнами ---
-
-    //showTransactions(accountId, accountName) {
-    //  this.selectedAccountForModal = { id: accountId, name: accountName };
-    //  this.showingTransactionList = true;
-    //  this.showingAddTransaction = false;
-    //  this.showingCreateAccount = false;
-    //  this.showingGlobalRateModal = false; 
-    //},
-
     toggleTransactions(accountId) {
     if (this.expandedAccountId === accountId) {
       // Если кликнули по уже раскрытому счету, сворачиваем
@@ -803,11 +788,6 @@ formatBalance(amount) {
       // так как TransactionList сам загрузит свои данные при отрисовке
     }
     },    
-
-    // closeTransactionList() {
-    //   this.showingTransactionList = false;
-    //   this.selectedAccountForModal = null;
-    //},
 
     showAddTransaction(accountId, accountName) { // Добавим имя для заголовка
       // Ищем полный объект аккаунта, чтобы показать имя в заголовке
@@ -885,31 +865,6 @@ formatBalance(amount) {
         }
     },
 
-    // --- ДОБАВЛЕН вспомогательный метод для получения текущей ставки ---
-    async fetchCurrentMonthRate() {
-        // Используем currentMonthStr из computed properties
-        const monthToFetch = this.currentMonthStr;
-        try {
-            // Используем эндпоинт GET /api/interest-rate для получения ставки
-            const response = await axios.get(`/api/interest-rate?month=${monthToFetch}`);
-            // Если API вернуло ставку, устанавливаем ее в поле ввода
-            if (response.data && response.data.rate !== null && response.data.rate !== undefined) {
-                // Преобразуем в число, т.к. API может вернуть Decimal как строку
-                this.newInterestRate = parseFloat(response.data.rate);
-            } else {
-                // Если ставка не установлена, очищаем поле
-                this.newInterestRate = null;
-            }
-        } catch (error) {
-             console.error(`Error fetching interest rate for ${monthToFetch}:`, error);
-             // При ошибке просто очищаем поле
-             this.newInterestRate = null;
-        }
-    },
-
-    // --- Метод loadAccounts() здесь не нужен, он находится ниже ---
-    // async loadAccounts() { ... }
-
     // --- Загрузка Данных ---
     async loadAccounts() {
       this.loading = true; // Устанавливаем флаг загрузки
@@ -928,7 +883,6 @@ formatBalance(amount) {
             console.log("Previous months data for first account:", this.accounts[0].previous_months);
             console.log("Current period data for first account:", this.accounts[0].current_period);
         }
-
 
       } catch (error) {
          console.error("Error loading accounts:", error);
