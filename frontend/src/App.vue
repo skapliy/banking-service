@@ -1,7 +1,6 @@
 <template>
   <div id="app">
     <header>
-      <h1>Копилки</h1>
     </header>
     <main>
       <AccountList />
@@ -32,13 +31,13 @@ export default {
 
 header {
   background-color: #f8f9fa;
-  padding: 20px;
+  padding: 1px;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0px 0px rgba(0, 0, 0, 0.1);
 }
 
 main {
-  padding: 20px;
+  padding: 10px;
   max-width: 1200px;
   margin: 0 auto;
 }

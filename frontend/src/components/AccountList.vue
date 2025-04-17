@@ -2,7 +2,7 @@
   <div class="accounts-container">
     <!-- Шапка с кнопками -->
     <div class="header-row">
-      <h2 class="page-title">Счета</h2>
+      <h2 class="page-title">Копилки</h2>
       <div class="action-buttons">
         <button
           class="action-button create-button"
@@ -82,7 +82,6 @@
           
           <!-- Исторические данные (свернуты по умолчанию) -->
           <div class="history-section" v-if="expandedAccountId === account.id">
-            <div class="history-title">История за последние 3 месяца:</div>
             <div class="history-grid">
               <div 
                 v-for="monthKey in lastThreeMonths" 
@@ -107,17 +106,19 @@
           </div>
           
           <!-- Транзакции (если развернуты) -->
-          <div 
+          <div
             v-if="expandedAccountId === account.id"
             class="transactions-wrapper"
           >
-            <TransactionList
-              :account-id="account.id"
-              :account-name="account.name"
-              @transactions-updated="handleTransactionsUpdate"
-              :key="`${account.id}-tx`"
-            />
-          </div>
+            <div class="details-wrapper" :style="{ maxHeight: expandedAccountId === account.id ? '500px' : '0px' }">
+                 <TransactionList
+                :account-id="account.id"
+                :account-name="account.name"
+                @transactions-updated="handleTransactionsUpdate"
+                :key="`${account.id}-tx`"
+              />
+            </div>
+             </div>
         </div>
         
         <!-- Итоговая карточка -->
@@ -346,16 +347,16 @@
 <style scoped>
 /* === Общие стили и адаптивность === */
 .accounts-container {
-  padding: 10px;
+  padding: 1px; /* Предотвращает схлопывание внешних отступов дочерних элементов */
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: hidden; /* Предотвращает случайный горизонтальный скролл страницы */
 }
 
 .loading, .error {
   text-align: center;
-  padding: 15px;
+  padding: 20px 15px; /* Добавлен горизонтальный паддинг */
   font-size: 1em;
-  margin: 10px 0;
+  margin: 15px 0;
 }
 
 .error {
@@ -365,75 +366,91 @@
   border-radius: 4px;
 }
 
+/* --- Шапка страницы --- */
 .header-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: space-between; /* Заголовок слева, кнопки справа */
   align-items: center;
-  margin-bottom: 15px;
-  flex-wrap: wrap;
+  margin-bottom: 20px; /* Больше отступ снизу */
+  flex-wrap: wrap; /* Перенос кнопок на новую строку на мал. экранах */
+  gap: 10px; /* Отступ между заголовком и кнопками при переносе */
+  padding: 0 17px; /* Отступы по бокам для мобильных */
 }
 
 .page-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.6rem; /* Чуть больше */
+  font-weight: 600;
 }
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 10px; /* Увеличен отступ между кнопками */
 }
 
-/* === Мобильный вид (карточки) === */
-.accounts-mobile {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.account-card {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 12px;
-  border: 1px solid #e0e0e0;
-}
-
-.header-row {
-  display: flex;
-  justify-content: space-between;
+/* === Унифицированные стили для Action Button === */
+.action-button,
+:deep(.action-button) /* Для кнопок внутри DeleteAccount */
+{
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 15px;
-  flex-wrap: wrap;
+  justify-content: center;
+  width: 32px;   /* Стандартный размер */
+  height: 32px;  /* Стандартный размер */
+  padding: 0;
+  margin-right: 10px;
+  box-sizing: border-box;
+  border: 1px solid;
+  border-radius: 5px; /* Чуть больше скругления */
+  background-color: #fff;
+  font-size: 1.4em; /* Размер иконки/символа */
+  font-weight: normal;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  overflow: hidden;
+  flex-shrink: 0; /* Предотвращает сжатие кнопок в flex контейнере */
 }
 
-.page-title {
-  margin: 0;
-  font-size: 1.5rem;
-}
+/* Цвета кнопок */
+.action-button.create-button { border-color: #198754; color: #198754; }
+.action-button.create-button:hover { background-color: #198754; color: white; }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-}
+.action-button.rate-button { border-color: #ffc107; color: #ffc107; }
+.action-button.rate-button:hover { background-color: #ffc107; color: white; }
 
-/* === Мобильный вид (карточки) === */
+.action-button.transaction-button { border-color: #0dcaf0; color: #0dcaf0; }
+.action-button.transaction-button:hover { background-color: #0dcaf0; color: white; }
+
+:deep(.action-button.delete-button) { border-color: #dc3545; color: #dc3545; }
+:deep(.action-button.delete-button:hover) { background-color: #dc3545; color: white; }
+
+
+/* === Мобильный вид (карточки) - По умолчанию === */
 .accounts-mobile {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 5px; /* Отступ между карточками */
+  padding: 0 3px; /* Небольшие отступы по бокам */
 }
 
 .account-card {
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 12px;
-  border: 1px solid #e0e0e0;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* Мягкая тень */
+  border: 1px solid #e9ecef; /* Светлая граница */
+  padding: 15px; /* Внутренний отступ */
 }
 
 .totals-card {
   background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  border-color: #dee2e6;
+  box-shadow: none;
+}
+.totals-card .account-name {
+    font-weight: bold;
 }
 
 .account-header {
@@ -441,39 +458,51 @@
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  padding-bottom: 8px;
+  padding-bottom: 6px; /* Отступ под шапкой карточки */
+  /* border-bottom: 1px solid #eee; */ /* Убрал границу, чтобы не перегружать */
+  /* margin-bottom: 10px; */
 }
 
 .account-name-container {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px; /* Отступ между элементами имени */
+  /* flex-grow: 1; */ /* Чтобы занимало доступное место */
+   overflow: hidden; /* Обрезать длинное имя */
 }
 
 .account-name {
   font-weight: 600;
-  font-size: 1.1em;
+  font-size: 1.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Многоточие для длинных имен */
 }
 
 .interest-rate-label {
   font-size: 0.8em;
   color: #6c757d;
   font-weight: normal;
+  white-space: nowrap;
+  flex-shrink: 0; /* Не сжимать */
 }
 
 .expand-icon {
   font-size: 0.8em;
   color: #888;
-  margin-left: 5px;
+  flex-shrink: 0; /* Не сжимать */
 }
 
 .balance-container {
   text-align: right;
+  flex-shrink: 0; /* Не сжимать баланс */
+  padding-left: 10px; /* Отступ слева от баланса */
 }
 
 .actual-balance {
   font-weight: 600;
-  font-size: 1.1em;
+  font-size: 1.1rem; /* Размер как у имени счета */
+  white-space: nowrap;
 }
 
 .actual-balance.negative {
@@ -483,34 +512,39 @@
 .projected-balance {
   font-size: 0.9em;
   color: #0d6efd;
+  white-space: nowrap;
 }
 
 .account-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+  justify-content: flex-end; /* Кнопки справа */
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #f1f1f1; /* Тонкая линия над кнопками */
 }
 
-/* История счета в мобильном виде */
-.history-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed #e0e0e0;
+/* --- История и Транзакции в мобильном виде --- */
+.history-section,
+.transactions-wrapper {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px dashed #e0e0e0; /* Разделитель для доп. секций */
 }
 
-.history-title {
-  font-size: 0.9em;
-  color: #6c757d;
-  margin-bottom: 8px;
+/* Обёртка для анимации раскрытия (применяется и к истории, и к транзакциям) */
+.details-wrapper {
+  overflow: hidden;
+  max-height: 0; /* Начальное состояние - скрыто */
+  transition: max-height 0.4s ease-out; /* Анимация */
 }
+/* Примечание: нужно обернуть .history-grid и TransactionList в .details-wrapper в шаблоне */
+/* Либо применить стиль max-height напрямую к .history-section и .transactions-wrapper */
 
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); /* Адаптивные колонки */
+  gap: 10px;
 }
 
 .month-card {
@@ -518,53 +552,51 @@
   border-radius: 6px;
   padding: 8px;
   text-align: center;
+  border: 1px solid #eee;
 }
 
 .month-name {
   font-size: 0.8em;
   color: #495057;
   margin-bottom: 5px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.month-data {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.month-data { display: flex; flex-direction: column; gap: 2px; }
+.month-data .balance { font-weight: 500; font-size: 0.9em; }
+.month-data .interest { font-size: 0.8em; color: #198754; }
+.month-data-na { color: #adb5bd; font-style: italic; font-size: 0.9em; }
+
+/* --- Стили для TransactionList внутри мобильной карточки --- */
+:deep(.transactions-wrapper .transaction-list) {
+  /* Убираем лишние отступы/рамки у самого компонента TransactionList */
+  padding: 0;
+  border: none;
+  box-shadow: none;
+}
+:deep(.transactions-wrapper .transaction-list .transactions-table-container) {
+   /* Контейнер таблицы внутри */
+   border-top: 1px solid #eee;
+   margin-top: 0; /* Убираем лишний отступ */
+   max-height: 300px; /* Ограничиваем высоту списка транзакций */
+   padding: 0; /* Убираем паддинг справа, если он не нужен в мобильной версии */
+}
+:deep(.transactions-wrapper .transaction-list .header) {
+    display: none; /* Скрываем заголовок внутри */
 }
 
-.month-data .balance {
-  font-weight: 500;
-  font-size: 0.9em;
-}
-
-.month-data .interest {
-  font-size: 0.8em;
-  color: #198754;
-}
-
-.month-data-na {
-  color: #adb5bd;
-  font-style: italic;
-}
-
-/* Транзакции в мобильном виде */
-.transactions-wrapper {
-  margin-top: 15px;
-  border-top: 1px solid #dee2e6;
-  padding-top: 15px;
-}
-
-/* === Десктопный вид (таблица) === */
+/* === Десктопный вид (таблица) - Скрыт по умолчанию === */
 .accounts-desktop {
-  display: none; /* Скрыт на мобильных */
+  display: none;
 }
 
 .accounts-table {
   width: 100%;
   border-collapse: collapse;
+  margin-top: 10px; /* Отступ сверху */
 }
 
 .accounts-table th,
@@ -585,202 +617,204 @@
 .accounts-table th:nth-child(n+2) { text-align: right; }
 .accounts-table th:last-child { text-align: center; }
 
-/* Стили для кнопок действий */
-.action-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
+.accounts-table .historical-cell { min-width: 100px; text-align: right; }
+.accounts-table .monthly-data .balance { font-weight: 500; }
+.accounts-table .monthly-data .interest { font-size: 0.85em; color: #198754; }
+.accounts-table .monthly-data-na { color: #adb5bd; text-align: center; font-style: italic; }
+
+.accounts-table .balance-container { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+.accounts-table .actual-balance { font-weight: 600; }
+.accounts-table .projected-balance { font-size: 0.9em; color: #0d6efd; }
+.accounts-table td.negative .actual-balance { color: #dc3545; }
+
+.accounts-table .actions { text-align: center; white-space: nowrap; width: 100px; }
+
+/* --- Стили для раскрывающейся строки транзакций в ДЕСКТОПНОЙ таблице --- */
+/* (Эти стили были пропущены в предыдущем варианте) */
+.accounts-table .transaction-details-row td {
   padding: 0;
-  border: 1px solid;
-  border-radius: 4px;
-  background-color: #fff;
-  font-size: 1.4em;
-  line-height: 1;
-  text-align: center;
-  cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  background-color: #fdfdfd;
+  border-top: 1px dashed #e0e0e0;
+  border-bottom: 1px solid #dee2e6; /* Граница снизу как у обычных строк */
 }
 
-.action-button.create-button {
-  border-color: #198754;
-  color: #198754;
+.accounts-table .details-wrapper { /* Анимация для десктопа */
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.4s ease-out;
 }
 
-.action-button.create-button:hover {
-  background-color: #198754;
-  color: white;
+:deep(.accounts-table .transaction-details-row .transaction-list) {
+  padding: 15px; /* Внутренний отступ */
+  border: none;
+  box-shadow: none;
+}
+:deep(.accounts-table .transaction-details-row .transaction-list .header) {
+  display: none;
+}
+:deep(.accounts-table .transaction-details-row .transactions-table-container) {
+  border-top: 1px solid #eee;
+  margin-top: 10px;
 }
 
-.action-button.rate-button {
-  border-color: #ffc107;
-  color: #ffc107;
+/* --- Подвал таблицы (Totals) --- */
+.accounts-table tfoot .totals-row td {
+  font-weight: bold;
+  border-top: 2px solid #dee2e6;
+  background-color: #f8f9fa;
 }
+.accounts-table tfoot .totals-cell { text-align: right; }
+.accounts-table tfoot .totals-cell .balance-container,
+.accounts-table tfoot .totals-cell .monthly-data { text-align: right; }
+.accounts-table tfoot .totals-cell .monthly-data .interest { color: #198754; }
+.accounts-table tfoot .totals-cell .projected-balance { color: #0d6efd; }
 
-.action-button.rate-button:hover {
-  background-color: #ffc107;
-  color: white;
-}
-
-.action-button.transaction-button {
-  border-color: #0dcaf0;
-  color: #0dcaf0;
-}
-
-.action-button.transaction-button:hover {
-  background-color: #0dcaf0;
-  color: white;
-}
-
-:deep(.action-button.delete-button) {
-  border-color: #dc3545;
-  color: #dc3545;
-}
-
-:deep(.action-button.delete-button:hover) {
-  background-color: #dc3545;
-  color: white;
-}
-
-/* === Модальные окна === */
+/* === Модальные окна (Общие стили) === */
 .modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6); /* Чуть темнее фон */
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 15px; /* Отступы, чтобы модалка не прилипала к краям */
+  box-sizing: border-box;
 }
 
 .modal-content {
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); /* Заметнее тень */
+  width: 100%; /* Ширина по умолчанию */
+  max-width: 500px; /* Макс ширина по умолчанию */
+  max-height: calc(100vh - 40px); /* Макс высота с отступами */
+  overflow-y: auto; /* Внутренний скролл, если контент не влезает */
+  display: flex; /* Чтобы flex-direction работал */
+  flex-direction: column; /* Шапка и контент друг под другом */
 }
 
 .modal-content.small {
-  max-width: 350px;
+  max-width: 380px; /* Увеличена ширина для формы ставки */
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px;
+  padding: 12px 15px; /* Уменьшен вертикальный паддинг */
   border-bottom: 1px solid #dee2e6;
+  flex-shrink: 0; /* Шапка не должна сжиматься */
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.2rem;
+  font-weight: 600;
 }
 
 .close-button {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.6rem; /* Крупнее крестик */
+  font-weight: bold;
+  line-height: 1;
   cursor: pointer;
   color: #6c757d;
+  padding: 0 5px; /* Небольшой паддинг для клика */
+}
+.close-button:hover {
+    color: #343a40;
 }
 
+/* --- Форма изменения ставки в модалке --- */
 .change-rate-form {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  padding: 15px;
+  padding: 20px; /* Увеличены отступы */
 }
-
-.change-rate-form label {
-  font-weight: 500;
-}
-
+.change-rate-form label { font-weight: 500; margin-bottom: -8px; }
 .change-rate-form input {
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid #ced4da;
-  border-radius: 4px;
+  border-radius: 5px;
   font-size: 1em;
 }
-
-.change-rate-form .modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 10px;
+.change-rate-form input:focus {
+  outline: none;
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
-
+.change-rate-form .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
 .change-rate-form .save-button,
-.change-rate-form .cancel-button {
-  padding: 8px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: none;
-  font-weight: 500;
-}
+.change-rate-form .cancel-button { padding: 9px 18px; border-radius: 5px; cursor: pointer; border: none; font-weight: 500; }
+.change-rate-form .save-button { background-color: #198754; color: white; }
+.change-rate-form .cancel-button { background-color: #6c757d; color: white; }
+.change-rate-form .error { color: #dc3545; font-size: 0.9em; text-align: center; margin-top: 5px;}
 
-.change-rate-form .save-button {
-  background-color: #198754;
-  color: white;
-}
 
-.change-rate-form .cancel-button {
-  background-color: #6c757d;
-  color: white;
-}
-
-.change-rate-form .error {
-  color: #dc3545;
-  font-size: 0.9em;
-  text-align: center;
-}
-
-/* === Медиа-запросы для адаптивности === */
-@media (min-width: 768px) {
+/* === Медиа-запросы для переключения Desktop/Mobile === */
+@media (min-width: 992px) { /* Используем breakpoint побольше (lg) для переключения на таблицу */
   .accounts-container {
-    padding: 20px;
+    padding: 10px 20px; /* Добавляем отступы на больших экранах */
   }
-  
+
+  .header-row {
+      padding: 0; /* Убираем боковые отступы шапки на десктопе */
+  }
+
   .accounts-mobile {
     display: none; /* Скрываем карточки на десктопе */
   }
-  
+
   .accounts-desktop {
     display: block; /* Показываем таблицу на десктопе */
   }
-  
+
   .modal-content {
-    width: auto;
-    min-width: 500px;
+    width: auto; /* Позволяем модалке быть шире */
+    /* min-width: 500px; */ /* Можно убрать или настроить */
   }
 }
 
-/* Для очень маленьких экранов */
-@media (max-width: 360px) {
-  .history-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2 колонки вместо 3 */
+/* Дополнительная адаптация для очень маленьких экранов */
+@media (max-width: 400px) {
+  .page-title {
+      font-size: 1.4rem; /* Уменьшаем заголовок */
   }
-  
-  .account-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .history-grid {
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); /* Еще меньше колонки истории */
     gap: 8px;
   }
-  
-  .balance-container {
-    align-self: flex-end;
-  }
-}
-</style>  
 
+  .account-header {
+    flex-wrap: wrap; /* Разрешаем перенос баланса под имя */
+    gap: 5px;
+  }
+  .balance-container {
+      /* width: 100%; */ /* Можно растянуть баланс */
+      text-align: right; /* Убедимся, что он справа */
+      padding-left: 0;
+  }
+  .account-name {
+      font-size: 1.0rem; /* Чуть меньше имя */
+  }
+   .actual-balance {
+       font-size: 1.0rem;
+   }
+
+   .modal-content {
+       max-width: calc(100% - 20px); /* Модалка чуть уже */
+   }
+   .modal-header h3 {
+       font-size: 1.1rem;
+   }
+}
+</style>
 
 <script>
 import axios from 'axios';

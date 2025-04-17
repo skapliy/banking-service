@@ -1,6 +1,5 @@
 <template>
   <div class="create-account">
-    <h2>Создать счет</h2>
     <form @submit.prevent="submitAccount">
       <div class="form-group">
         <label for="name">Название счета</label>
@@ -24,7 +23,7 @@
           class="form-control"
         >
       </div>
-
+      
       <div class="form-group">
         <label for="interest-rate">Процентная ставка (%)</label>
         <input
@@ -96,10 +95,20 @@ export default {
 <style scoped>
 .create-account {
   padding: 20px;
+  max-width: 100%; /* Ограничиваем максимальную ширину */
+  box-sizing: border-box; /* Учитываем padding в общей ширине */
+}
+
+h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
 }
 
 .form-group {
   margin-bottom: 15px;
+  width: 100%; /* Устанавливаем ширину группы формы */
+  box-sizing: border-box; /* Учитываем padding в общей ширине */
 }
 
 .form-group label {
@@ -114,6 +123,8 @@ export default {
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 16px;
+  box-sizing: border-box; /* Важно! Учитываем padding в общей ширине */
+  max-width: 100%; /* Предотвращаем выход за границы */
 }
 
 .form-control:focus {
@@ -122,20 +133,44 @@ export default {
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
+input[type="number"].form-control {
+  min-width: 0;
+  width: 100%;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"].form-control::-webkit-outer-spin-button,
+input[type="number"].form-control::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="date"].form-control {
+  min-width: 0;
+  width: 100%;
+}
+
 .form-actions {
   display: flex;
   gap: 10px;
   margin-top: 20px;
+  flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку при необходимости */
+  justify-content: flex-end; /* Выравнивание кнопок по правому краю */
+}
+
+.submit-button, .cancel-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  border: none;
+  flex: 0 0 auto; /* Предотвращает сжатие кнопок */
 }
 
 .submit-button {
   background-color: #28a745;
   color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
 }
 
 .submit-button:hover {
@@ -150,14 +185,22 @@ export default {
 .cancel-button {
   background-color: #6c757d;
   color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
 }
 
 .cancel-button:hover {
   background-color: #5a6268;
+}
+
+/* Медиа-запрос для маленьких экранов */
+@media (max-width: 480px) {
+  .form-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .submit-button, .cancel-button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
 }
 </style>

@@ -74,7 +74,6 @@ export default {
           date: this.date,
           comment: this.comment
         };
-
         await axios.post('/api/transactions', transactionData);
         this.$emit('transaction-added');
         this.resetForm();
@@ -98,10 +97,13 @@ export default {
 <style scoped>
 .add-transaction {
   padding: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-group {
   margin-bottom: 15px;
+  width: 100%;
 }
 
 .form-group label {
@@ -116,6 +118,13 @@ export default {
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 16px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+input[type="date"].form-control {
+  min-width: 0;
+  width: 100%;
 }
 
 .form-control:focus {
@@ -128,16 +137,22 @@ export default {
   display: flex;
   gap: 10px;
   margin-top: 20px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.submit-button, .cancel-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  border: none;
+  flex: 0 0 auto;
 }
 
 .submit-button {
   background-color: #28a745;
   color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
 }
 
 .submit-button:hover {
@@ -152,14 +167,21 @@ export default {
 .cancel-button {
   background-color: #6c757d;
   color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
 }
 
 .cancel-button:hover {
   background-color: #5a6268;
 }
-</style> 
+
+@media (max-width: 480px) {
+  .form-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .submit-button, .cancel-button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+</style>

@@ -325,7 +325,7 @@ export default {
 
 /* Стилизация отдельных столбцов */
 .transactions-table td:nth-child(2) { /* Сумма */
-    text-align: right;
+    text-align: left;
     font-weight: 500;
     min-width: 100px; /* Чтобы сумма не переносилась */
     white-space: nowrap;
