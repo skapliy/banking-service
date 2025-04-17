@@ -13,7 +13,7 @@
         <thead>
           <tr>
             <th>Дата</th>
-            <th>Сумма (+%)</th> <!-- Название столбца меняется -->
+            <th>Сумма</th>
             <th>Комментарий</th>
             <th>Действия</th>
           </tr>
@@ -24,7 +24,7 @@
             <template v-if="editingTransactionId !== tx.id">
               <td>{{ formatDateForDisplay(tx.date) }}</td>
               <td :class="{ 'deposit': tx.amount > 0, 'withdrawal': tx.amount < 0 }">
-                  {{ formatCurrency(tx.amount)}}
+                  {{ formatCurrency(tx.amount)}} 
               </td>
               <td>{{ tx.comment }}</td>
               <td>
@@ -246,70 +246,102 @@ export default {
 </script>
 
 <style scoped>
-/* Убираем старые стили списка, используем таблицу */
+/* Общие стили компонента TransactionList */
 .transaction-list {
-  /* Стили контейнера остаются */
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 15px; /* Уменьшим паддинг */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  max-width: 90%; /* Сделаем шире */
-  margin: 0 auto;
+  /* Убираем стили контейнера, так как он встраивается */
+  background-color: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  max-width: 100%;
+  margin: 0;
 }
 
+/* Заголовок внутри TransactionList (можно скрыть, если имя счета видно в AccountList) */
 .header {
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
+  /* display: none; */ /* Раскомментируйте, чтобы скрыть */
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: none; /* Линия не нужна, если скрыт или если есть рамка у контейнера таблицы */
 }
-.header h3 { margin: 0; font-size: 1.1em; color: #333; }
+.header h3 {
+  margin: 0;
+  font-size: 1.0em; /* Можно сделать чуть меньше, если заголовок остается */
+  font-weight: 600;
+  color: #333;
+}
 
-.loading, .error, .no-transactions { text-align: center; padding: 15px; font-size: 0.95em; }
-.error { color: #dc3545; }
-.action-error { font-size: 0.9em; text-align: center; margin-top: 10px; }
+/* Сообщения о статусе загрузки */
+.loading, .error, .no-transactions {
+  text-align: center;
+  padding: 15px;
+  font-size: 0.95em;
+  color: #6c757d; /* Более нейтральный цвет для информации */
+}
+.error, .action-error { /* Ошибки выделяем */
+  color: #dc3545;
+}
+.action-error {
+  font-size: 0.9em;
+  text-align: center;
+  margin-top: 10px;
+}
 
+/* Контейнер таблицы с прокруткой */
 .transactions-table-container {
-  max-height: 65vh; /* Макс высота для скролла */
-  overflow-y: auto;
-  padding-right: 5px; /* Отступ для скроллбара */
+  max-height: 350px;   /* Макс. высота ~10 строк, ПОДБЕРИТЕ ТОЧНЕЕ под высоту строки */
+  overflow-y: auto;    /* Включаем скролл, если строк больше */
+  padding-right: 5px;  /* Небольшой отступ справа для скроллбара */
+  /* border-top: 1px solid #eee; */ /* Рамка сверху, если нужно визуально отделить от заголовка (если он есть) */
 }
 
-/* Стили таблицы */
+/* Стили самой таблицы */
 .transactions-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9em; /* Уменьшим шрифт */
+    font-size: 0.9em;
 }
-.transactions-table th,
+
+/* Заголовки таблицы (прилипающие) */
+.transactions-table th {
+    background-color: #f8f9fa; /* Светлый фон для заголовков */
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: middle;
+    position: sticky;   /* Заголовок остается при прокрутке */
+    top: 0;             /* Прилипает к верху контейнера .transactions-table-container */
+    z-index: 1;
+    border-bottom: 2px solid #dee2e6; /* Более заметная нижняя граница для заголовков */
+}
+
+/* Ячейки таблицы */
 .transactions-table td {
-    border-bottom: 1px solid #eee;
-    padding: 8px 10px; /* Уменьшим паддинг */
+    border-bottom: 1px solid #eee; /* Разделитель строк */
+    padding: 8px 10px;
     text-align: left;
     vertical-align: middle;
 }
-.transactions-table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
-    position: sticky; /* Прилипающий заголовок */
-    top: 0;
-    z-index: 1;
-}
+
+/* Стилизация отдельных столбцов */
 .transactions-table td:nth-child(2) { /* Сумма */
     text-align: right;
     font-weight: 500;
-    min-width: 100px;
+    min-width: 100px; /* Чтобы сумма не переносилась */
+    white-space: nowrap;
 }
 .transactions-table td:nth-child(3) { /* Комментарий */
     color: #555;
-    word-break: break-word;
+    word-break: break-word; /* Перенос длинных комментариев */
+    min-width: 150px; /* Дать больше места комментарию */
 }
 .transactions-table td:nth-child(4) { /* Действия */
     text-align: center;
-    white-space: nowrap;
-    width: 80px; /* Фикс ширина для кнопок */
+    white-space: nowrap; /* Кнопки в одну строку */
+    width: 80px; /* Фиксированная ширина для кнопок */
 }
 
-/* Стили для кнопок действий */
+/* Стили для кнопок действий (редактировать, удалить, сохранить, отмена) */
 .transactions-table button {
     background: none;
     border: none;
@@ -318,9 +350,11 @@ export default {
     margin: 0 2px;
     font-size: 1.1em; /* Размер иконок */
     border-radius: 3px;
+    vertical-align: middle; /* Выравнивание иконок по центру строки */
+    transition: background-color 0.15s ease-in-out; /* Плавность при наведении */
 }
 .transactions-table button:hover {
-    background-color: #eee;
+    background-color: #e9ecef; /* Фон при наведении чуть темнее */
 }
 .edit-btn { color: #007bff; }
 .delete-btn { color: #dc3545; }
@@ -334,19 +368,39 @@ export default {
     border: 1px solid #ccc;
     border-radius: 3px;
     font-size: inherit; /* Наследуем размер шрифта ячейки */
-    box-sizing: border-box;
+    box-sizing: border-box; /* Учитываем padding и border в ширине */
 }
-.edit-amount { text-align: right; }
-.edit-date { min-width: 130px; } /* Чтобы календарь поместился */
+.edit-amount {
+    text-align: right;
+}
+.edit-date {
+    min-width: 130px; /* Чтобы влез виджет календаря */
+}
+/* Улучшение вида input-ов */
+.edit-input:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
 
-/* Стили для сумм */
-.deposit { color: #28a745; }
+/* Стили для сумм (пополнение/снятие) */
+.deposit { color: #198754; } /* Более современный зеленый */
 .withdrawal { color: #dc3545; }
 
-/* Стили скроллбара (опционально) */
-.transactions-table-container::-webkit-scrollbar { width: 6px; }
-.transactions-table-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
-.transactions-table-container::-webkit-scrollbar-thumb { background: #aaa; border-radius: 3px; }
-.transactions-table-container::-webkit-scrollbar-thumb:hover { background: #888; }
-
+/* Стили скроллбара (опционально, WebKit браузеры) */
+.transactions-table-container::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.transactions-table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+.transactions-table-container::-webkit-scrollbar-thumb {
+    background: #aaa;
+    border-radius: 3px;
+}
+.transactions-table-container::-webkit-scrollbar-thumb:hover {
+    background: #888;
+}
 </style>

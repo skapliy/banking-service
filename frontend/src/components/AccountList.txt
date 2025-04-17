@@ -520,7 +520,7 @@ export default {
     /**
      * Форматирует число как валюту RUB.
      */
-     formatBalance(amount) {
+formatBalance(amount) {
     // Преобразуем в число, если это строка (API может вернуть Decimal как строку)
     const numAmount = (typeof amount === 'string') ? parseFloat(amount) : amount;
     if (numAmount === undefined || numAmount === null || isNaN(numAmount)) return '-';
@@ -530,7 +530,7 @@ export default {
         maximumFractionDigits: 2,           // Максимальная длина дробной части — 2 цифры
         useGrouping: true                   // Включаем группировку разрядов (разделители тысяч)
     }).format(numAmount);
-    },
+},
 
     handleTransactionsUpdate() {
         console.log("Transaction list updated, reloading accounts...");

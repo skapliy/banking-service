@@ -1,23 +1,23 @@
 <template>
   <div class="accounts-container">
     <div class="header-row">
-      <button 
-          class="action-button create-button" 
-          @click="showCreateAccount" 
-          title="Создать новый счет">
-          +
+      <button
+        class="action-button create-button"
+        @click="showCreateAccount"
+        title="Создать новый счет"
+      >
+        +
       </button>
       <button
         class="action-button rate-button"
         title="Установить ставку на текущий месяц"
-        @click="showGlobalRateModal"  >
+        @click="showGlobalRateModal"
+      >
         %
-      </button>     
+      </button>
     </div>
 
-    <div v-if="loading" class="loading">
-      Загрузка счетов...
-    </div>
+    <div v-if="loading" class="loading">Загрузка счетов...</div>
 
     <div v-else-if="error" class="error">
       Ошибка при загрузке данных: {{ error }}
@@ -28,81 +28,127 @@
         <thead>
           <tr>
             <th>Счет</th>
-            <th v-for="monthKey in lastThreeMonths" :key="monthKey">{{ formatMonthYear(monthKey) }}</th>
+            <th v-for="monthKey in lastThreeMonths" :key="monthKey">
+              {{ formatMonthYear(monthKey) }}
+            </th>
             <th>Баланс / Прогноз</th>
             <th>Действия</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="account in accounts" :key="account.id">
-            <td>
-              <span
-                class="account-name clickable"
-                @click="showTransactions(account.id, account.name)"
-                :title="`Показать транзакции для ${account.name}`"
-              >
-                {{ account.name }}
+          <template v-for="account in accounts" :key="account.id">
+            <tr>
+              <td>
                 <span
-                  v-if="account.current_interest_rate !== undefined && account.current_interest_rate !== null"
-                  class="interest-rate-label"
-                  :title="`Текущая ставка: ${account.current_interest_rate}%`"
+                  class="account-name clickable"
+                  @click="toggleTransactions(account.id)" :title="`${ expandedAccountId === account.id ? 'Скрыть' : 'Показать'} транзакции для ${account.name}`"
+                  :class="{ expanded: expandedAccountId === account.id }"
                 >
-                  ({{ account.current_interest_rate }}%)
+                  {{ account.name }}
+                  <span
+                    v-if="account.current_interest_rate !== undefined && account.current_interest_rate !== null"
+                    class="interest-rate-label"
+                    :title="`Текущая ставка: ${account.current_interest_rate}%`"
+                  >
+                    ({{ account.current_interest_rate }}%)
+                  </span>
+                  <span
+                    v-else
+                    class="interest-rate-label"
+                    title="Ставка не установлена"
+                  >
+                    (-%)
+                  </span>
+                  <span class="expand-icon">{{
+                    expandedAccountId === account.id ? "▲" : "▼"
+                  }}</span>
                 </span>
-                 <span v-else class="interest-rate-label" title="Ставка не установлена">
-                  (-%)
-                </span>
-              </span>
-            </td>
+              </td>
 
-            <td
-              v-for="monthKey in lastThreeMonths"
-              :key="monthKey"
-              class="historical-cell"
-            >
-              <div class="monthly-data" v-if="account.previous_months[monthKey]">
-                <div class="balance" title="Остаток на конец месяца">
-                  {{ formatBalance(account.previous_months[monthKey].end_balance) }}
-                </div>
-                <div class="interest" title="Начислено процентов за месяц">
-                  +{{ formatBalance(account.previous_months[monthKey].interest_accrued) }}
-                </div>
-              </div>
-              <div v-else class="monthly-data-na">
-                -
-              </div>
-            </td>
-
-            <td :class="{ 'negative': account.current_period.current_balance < 0 }">
-              <div class="balance-container">
-                <div class="actual-balance" title="Текущий фактический баланс">
-                    {{ formatBalance(account.current_period.current_balance) }}
-                </div>
-              <div
-               class="projected-balance"
-                :title="`Прогноз на конец ${formatMonthYear(currentMonthStr)} с учетом процентов (${formatValueForTitle(account.current_period.projected_interest)} ₽)`"
-             >
-               {{ formatBalance(account.current_period.projected_eom_balance) }}
-             </div>
-                
-              </div>
-            </td>
-
-            <td class="actions">
-                <button
-                class="action-button transaction-button"
-                @click="showAddTransaction(account.id, account.name)"
-                title="Добавить транзакцию"
+              <td
+                v-for="monthKey in lastThreeMonths"
+                :key="monthKey"
+                class="historical-cell"
               >
-                ±
-              </button>
-               <DeleteAccount
-                :account-id="account.id"
-                @deleted="loadAccounts"
-              />
-            </td>
-          </tr>
-        </tbody>
+                <div
+                  class="monthly-data"
+                  v-if="account.previous_months[monthKey]"
+                >
+                  <div class="balance" title="Остаток на конец месяца">
+                    {{
+                      formatBalance(
+                        account.previous_months[monthKey].end_balance
+                      )
+                    }}
+                  </div>
+                  <div class="interest" title="Начислено процентов за месяц">
+                    +{{
+                      formatBalance(
+                        account.previous_months[monthKey].interest_accrued
+                      )
+                    }}
+                  </div>
+                </div>
+                <div v-else class="monthly-data-na">-</div>
+              </td>
+
+              <td
+                :class="{ negative: account.current_period.current_balance < 0 }"
+              >
+                <div class="balance-container">
+                  <div class="actual-balance" title="Текущий фактический баланс">
+                    {{
+                      formatBalance(account.current_period.current_balance)
+                    }}
+                  </div>
+                  <div
+                    class="projected-balance"
+                    :title="`Прогноз на конец ${formatMonthYear(
+                      currentMonthStr
+                    )} с учетом процентов (${formatValueForTitle(
+                      account.current_period.projected_interest
+                    )} ₽)`"
+                  >
+                    {{
+                      formatBalance(
+                        account.current_period.projected_eom_balance
+                      )
+                    }}
+                  </div>
+                </div>
+              </td>
+
+              <td class="actions">
+                <button
+                  class="action-button transaction-button"
+                  @click="showAddTransaction(account.id, account.name)"
+                  title="Добавить транзакцию"
+                >
+                  ±
+                </button>
+                <DeleteAccount
+                  :account-id="account.id"
+                  @deleted="loadAccounts"
+                />
+              </td>
+            </tr>
+
+            <tr
+              v-if="expandedAccountId === account.id"
+              class="transaction-details-row"
+            >
+              <td :colspan="1 + lastThreeMonths.length + 1 + 1">
+                <div class="details-wrapper" :style="{ maxHeight: expandedAccountId === account.id ? '1000px' : '0px' }">
+                    <TransactionList
+                        :account-id="account.id"
+                        :account-name="account.name"
+                        @transactions-updated="handleTransactionsUpdate"
+                        :key="account.id + '-tx'" />
+                 </div>
+              </td>
+            </tr>
+          </template>
+          </tbody>
         <tfoot>
           <tr class="totals-row">
             <td><strong>Итого:</strong></td>
@@ -114,201 +160,285 @@
             >
               <div v-if="totalsByMonth[monthKey]" class="monthly-data">
                 <div class="balance" title="Сумма остатков на конец месяца">
-                    {{ formatBalance(totalsByMonth[monthKey].totalEndBalance) }}
+                  {{
+                    formatBalance(totalsByMonth[monthKey].totalEndBalance)
+                  }}
                 </div>
-                <div class="interest" title="Сумма начисленных процентов за месяц">
-                    +{{ formatBalance(totalsByMonth[monthKey].totalInterestAccrued) }}
+                <div
+                  class="interest"
+                  title="Сумма начисленных процентов за месяц"
+                >
+                  +{{
+                    formatBalance(
+                      totalsByMonth[monthKey].totalInterestAccrued
+                    )
+                  }}
                 </div>
               </div>
-               <div v-else class="monthly-data-na">-</div>
+              <div v-else class="monthly-data-na">-</div>
             </td>
 
             <td class="totals-cell">
-                <div class="balance-container">
-                    <div class="actual-balance" title="Сумма текущих балансов">
-                        {{ formatBalance(currentPeriodTotals.totalCurrentBalance) }}
-                    </div>
-                    <div class="projected-balance" title="Сумма прогнозируемых балансов на конец месяца">
-                        {{ formatBalance(currentPeriodTotals.totalProjectedEomBalance) }}
-                    </div>
+              <div class="balance-container">
+                <div class="actual-balance" title="Сумма текущих балансов">
+                  {{
+                    formatBalance(currentPeriodTotals.totalCurrentBalance)
+                  }}
                 </div>
+                <div
+                  class="projected-balance"
+                  title="Сумма прогнозируемых балансов на конец месяца"
+                >
+                  {{
+                    formatBalance(
+                      currentPeriodTotals.totalProjectedEomBalance
+                    )
+                  }}
+                </div>
+              </div>
             </td>
 
-            <td></td>
-          </tr>
+            <td></td> </tr>
         </tfoot>
-
-
       </table>
-
-      <div v-if="showingTransactionList" class="modal">
-        <div class="modal-content wide">
-          <div class="modal-header">
-            <h4>Транзакции: {{ selectedAccountForModal?.name }}</h4>
-            <button @click="closeTransactionList" class="close-button">&times;</button>
-          </div>
-          <TransactionList
-            v-if="selectedAccountForModal"
-            :account-id="selectedAccountForModal.id"
-            :account-name="selectedAccountForModal.name"
-            @close="closeTransactionList"
-            @transactions-updated="handleTransactionsUpdate" />
-        </div>
-      </div>
 
       <div v-if="showingAddTransaction" class="modal">
         <div class="modal-content">
-          <div class="modal-header">
-            <h3>Новая транзакция: {{ selectedAccountForModal?.name }}</h3>
-            <button @click="closeAddTransaction" class="close-button">&times;</button>
-          </div>
-          <AddTransaction
-            v-if="selectedAccountForModal"
-            :account-id="selectedAccountForModal.id"
-            @transaction-added="onActionComplete"
-            @close="closeAddTransaction"
-          />
-        </div>
+           <div class="modal-header">
+             <h3>Новая транзакция: {{ selectedAccountForModal?.name }}</h3>
+             <button @click="closeAddTransaction" class="close-button">&times;</button>
+           </div>
+           <AddTransaction
+             v-if="selectedAccountForModal"
+             :account-id="selectedAccountForModal.id"
+             @transaction-added="onActionComplete"
+             @close="closeAddTransaction"
+           />
+         </div>
       </div>
 
       <div v-if="showingCreateAccount" class="modal">
         <div class="modal-content">
-          <div class="modal-header">
-            <h3>Создать новый счет</h3>
-            <button @click="closeCreateAccount" class="close-button">&times;</button>
-          </div>
-          <CreateAccount
-            @account-created="onActionComplete"
-            @close="closeCreateAccount"
-          />
-        </div>
+           <div class="modal-header">
+             <h3>Создать новый счет</h3>
+             <button @click="closeCreateAccount" class="close-button">&times;</button>
+           </div>
+           <CreateAccount
+             @account-created="onActionComplete"
+             @close="closeCreateAccount"
+           />
+         </div>
       </div>
 
       <div v-if="showingGlobalRateModal" class="modal">
-      <div class="modal-content small"> <div class="modal-header">
-          <h3>Ставка за {{ formatMonthYear(currentMonthStr) }}</h3>
-          <button @click="closeGlobalRateModal" class="close-button">&times;</button>
-        </div>
-        <div class="change-rate-form">
-           <label for="global-rate-input">Новая ставка (%):</label>
-           <input
-              type="number"
-              id="global-rate-input"
-              v-model.number="newInterestRate" min="0"
-              step="0.01"
-              placeholder="Например, 15.00"
-            />
-            <div class="modal-actions">
-              <button @click="saveGlobalInterestRate" class="save-button">Сохранить</button>
-              <button @click="closeGlobalRateModal" class="cancel-button">Отмена</button>
-            </div>
-             <p v-if="rateChangeError" class="error">{{ rateChangeError }}</p>
-        </div>
+        <div class="modal-content small"> <div class="modal-header">
+           <h3>Ставка за {{ formatMonthYear(currentMonthStr) }}</h3>
+           <button @click="closeGlobalRateModal" class="close-button">&times;</button>
+         </div>
+         <div class="change-rate-form">
+            <label for="global-rate-input">Новая ставка (%):</label>
+            <input
+               type="number"
+               id="global-rate-input"
+               v-model.number="newInterestRate" min="0"
+               step="0.01"
+               placeholder="Например, 15.00"
+             />
+             <div class="modal-actions">
+               <button @click="saveGlobalInterestRate" class="save-button">Сохранить</button>
+               <button @click="closeGlobalRateModal" class="cancel-button">Отмена</button>
+             </div>
+              <p v-if="rateChangeError" class="error">{{ rateChangeError }}</p>
+         </div>
+       </div>
       </div>
-    </div>
-
-    </div>
+      </div>
   </div>
 </template>
 
 <style scoped>
+/* === Общие стили контейнера и загрузки === */
+.accounts-container {
+  /* Можно добавить стили для общего контейнера, если нужно */
+  /* Например: padding: 20px; */
+}
 
-/* Дополнительные или измененные стили */
+.loading, .error {
+  text-align: center;
+  padding: 20px;
+  font-size: 1.0em;
+}
+.error {
+  color: #dc3545;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+.header-row {
+  margin-bottom: 15px; /* Отступ снизу от кнопок до таблицы */
+  display: flex;
+  gap: 10px; /* Пространство между кнопками */
+  /* align-items: center; */ /* Если нужно выровнять по вертикали */
+}
+
+/* === Стили таблицы счетов === */
+.accounts-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* table-layout: fixed; */ /* Раскомментируйте, если хотите фиксированную ширину столбцов */
+}
+
 .accounts-table th,
 .accounts-table td {
-  padding: 10px 12px; /* Немного уменьшим паддинг */
-  vertical-align: middle; /* Выравниваем по центру вертикально */
+  padding: 10px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #dee2e6; /* Стандартная граница строки */
 }
 
+.accounts-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  text-align: left; /* Выравнивание заголовков по левому краю */
+  white-space: nowrap;
+}
+.accounts-table th:nth-child(1) { text-align: left; } /* Первый столбец - счет */
+.accounts-table th:nth-child(n+2) { text-align: right; } /* Остальные (месяцы, баланс) - вправо */
+.accounts-table th:last-child { text-align: center; } /* Последний (действия) - центр */
+
+
+/* === Стили ячеек таблицы === */
+
+/* Имя счета (кликабельное) */
+.account-name.clickable {
+  cursor: pointer;
+  display: inline-flex; /* Чтобы иконка была на той же строке */
+  align-items: center;
+  font-weight: 500; /* Слегка выделить имя счета */
+  transition: color 0.15s ease-in-out;
+}
+.account-name.clickable:hover {
+  color: #0056b3;
+  text-decoration: none; /* Убираем подчеркивание, если оно есть по умолчанию */
+}
 .interest-rate-label {
-  font-size: 0.8em; /* Чуть меньше */
+  font-size: 0.8em;
   color: #6c757d;
-  margin-left: 5px;
-  font-weight: normal; /* Сделаем обычным */
+  margin-left: 6px;
+  font-weight: normal;
+  white-space: nowrap; /* Не переносить ставку */
 }
+.expand-icon {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.8em;
+  color: #888;
+  transition: transform 0.2s ease-in-out; /* Анимация поворота иконки */
+}
+.account-name.clickable:hover .expand-icon {
+  color: #555;
+}
+/* Если нужно поворачивать иконку: */
+/* .account-name.expanded .expand-icon {
+     transform: rotate(180deg);
+} */
 
+/* Исторические данные (прошлые месяцы) */
 .historical-cell {
-  min-width: 100px; /* Можно настроить */
-  text-align: right; /* Выравниваем числа вправо */
+  min-width: 100px;
+  text-align: right;
 }
 .monthly-data .balance {
     font-weight: 500;
+    /* font-size: 0.95em; */
 }
 .monthly-data .interest {
     font-size: 0.85em;
-    color: #28a745; /* Зеленый для процентов */
+    color: #198754; /* Используем тот же зеленый, что и в TransactionList */
 }
 .monthly-data-na {
-    color: #aaa;
+    color: #adb5bd; /* Сделать 'н/д' менее заметным */
     text-align: center;
+    font-style: italic;
 }
 
+/* Текущий баланс и прогноз */
 .balance-container {
   display: flex;
   flex-direction: column;
-  gap: 2px; /* Меньше разрыв */
-  text-align: right; /* Выравниваем числа вправо */
+  gap: 3px; /* Чуть больше разрыв для читаемости */
+  text-align: right;
 }
 .actual-balance {
-    font-weight: 600; /* Текущий баланс жирнее */
+  font-weight: 600; /* Текущий баланс жирнее */
 }
 .projected-balance {
   font-size: 0.9em;
-  color: #007bff; /* Синий для прогноза */
+  color: #0d6efd; /* Используем тот же синий, что и в TransactionList */
+}
+/* Стиль для отрицательного баланса */
+td.negative .actual-balance {
+    color: #dc3545;
 }
 
+/* Ячейка с кнопками действий */
 .actions {
-    text-align: center; /* Центрируем кнопки */
-    white-space: nowrap; /* Запрещаем перенос кнопок */
+  text-align: center;
+  white-space: nowrap;
+  width: 100px; /* Немного больше места для кнопок */
 }
 
+/* === Стили подвала таблицы (Итоги) === */
 tfoot .totals-row td {
-  font-weight: bold; /* Жирный шрифт для итогов */
-  border-top: 2px solid #dee2e6; /* Жирная линия сверху */
-  background-color: #f8f9fa; /* Слегка другой фон */
+  font-weight: bold;
+  border-top: 2px solid #dee2e6;
+  background-color: #f8f9fa;
 }
 
 tfoot .totals-cell {
-    text-align: right;
+  text-align: right;
 }
+/* Убедимся, что контейнеры внутри итогов выровнены */
 tfoot .totals-cell .balance-container,
 tfoot .totals-cell .monthly-data {
-    text-align: right; /* Убедимся, что числа справа */
+  text-align: right;
 }
-
+/* Сохраняем цвета для процентов и прогноза в итогах */
 tfoot .totals-cell .monthly-data .interest {
-     color: #28a745; /* Сохраняем цвет процентов */
+  color: #198754;
 }
 tfoot .totals-cell .projected-balance {
-    color: #007bff; /* Сохраняем цвет прогноза */
+  color: #0d6efd;
 }
 
-:deep(.action-button) {
-  /* Основные для размера и выравнивания */
+/* === Стили кнопок действий (верхние и в строках) === */
+
+/* Общие стили для всех маленьких квадратных кнопок */
+:deep(.action-button), /* Для кнопок в DeleteAccount */
+.action-button /* Для кнопок в этом компоненте */
+{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;            /* Жесткая ширина */
-  height: 32px;           /* Жесткая высота */
-  padding: 0;             /* Убедитесь, что padding 0 */
-  box-sizing: border-box;  /* Важно */
-
-  /* Вспомогательные для внешнего вида */
+  width: 30px;            /* Чуть меньше */
+  height: 30px;           /* Чуть меньше */
+  padding: 0;
+  box-sizing: border-box;
   margin: 0 2px;
   border: 1px solid;
-  border-radius: 1px;
-  background-color: white;
-  font-size: 2em;
-  font-weight: bold;
+  border-radius: 4px; /* Слегка скруглим */
+  background-color: #fff;
+  font-size: 1.6em; /* Уменьшим иконку/текст */
+  font-weight: normal; /* Уберем жирность, если не нужна */
   line-height: 1;
   text-align: center;
   vertical-align: middle;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
   overflow: hidden;
 }
 
-/* Стили для кнопки изменения ставки (%) - БЕЗ :deep(), т.к. кнопка в этом же компоненте */
+/* Кнопка Ставки (%) */
 .action-button.rate-button {
   border-color: #ffc107;
   color: #ffc107;
@@ -318,25 +448,33 @@ tfoot .totals-cell .projected-balance {
   color: white;
 }
 
+/* Кнопка Создать (+) */
 .action-button.create-button {
-  border-color: #07ff77;
-  color: #07ff77;
+  /* border-color: #07ff77; */ /* Яркий цвет */
+  /* color: #07ff77; */
+   border-color: #198754; /* Стандартный зеленый */
+   color: #198754;
 }
 .action-button.create-button:hover {
-  background-color: #07ff77;
+  /* background-color: #07ff77; */
+  background-color: #198754;
   color: white;
 }
 
+/* Кнопка Добавить транзакцию (±) */
 .action-button.transaction-button {
-  border-color: #17a2b8;
-  color: #17a2b8;
+  /* border-color: #17a2b8; */ /* Бирюзовый */
+  /* color: #17a2b8; */
+   border-color: #0dcaf0; /* Голубой */
+   color: #0dcaf0;
 }
 .action-button.transaction-button:hover {
-  background-color: #17a2b8;
+  /* background-color: #17a2b8; */
+  background-color: #0dcaf0;
   color: white;
 }
 
-/* Стили для кнопки удаления (X/±) - :deep() НУЖЕН, т.к. кнопка в DeleteAccount.vue */
+/* Кнопка Удалить аккаунт (X) - стилизуется через :deep() */
 :deep(.action-button.delete-button) {
   border-color: #dc3545;
   color: #dc3545;
@@ -346,32 +484,77 @@ tfoot .totals-cell .projected-balance {
   color: white;
 }
 
-.header-row {
-  margin-bottom: 10px; /* Отступ снизу от кнопок до таблицы */
-  display: flex;       /* Выровнять кнопки в ряд */
-  text-align: center; /* Центрируем кнопки */
-  white-space: nowrap; /* Запрещаем перенос кнопок */
+
+/* === Стили для раскрывающегося блока транзакций === */
+
+/* Строка, содержащая TransactionList */
+.transaction-details-row td {
+  padding: 0; /* Убираем паддинг ячейки */
+  background-color: #fdfdfd; /* Очень легкий фон */
+  border-top: 1px dashed #e0e0e0; /* Менее заметный разделитель */
+  /* Убираем нижнюю границу, чтобы не было двойной линии с TransactionList */
+  border-bottom: none;
 }
 
+/* Обертка для анимации max-height */
+.details-wrapper {
+  overflow: hidden;
+  max-height: 0; /* Начальное состояние - скрыто */
+  transition: max-height 0.4s ease-out; /* Плавное раскрытие/скрытие */
+}
+
+/* Переопределение стилей TransactionList для лучшего встраивания */
+:deep(.transaction-details-row .transaction-list) {
+  padding: 15px; /* Внутренний отступ для содержимого */
+  box-shadow: none;
+  border-radius: 0;
+  max-width: 100%;
+  margin: 0;
+  border: none; /* Убираем свои рамки */
+  /* Добавим тонкую рамку сверху для отделения, если нужно */
+  /* border-top: 1px solid #eee; */
+}
+/* Скрытие заголовка внутри TransactionList */
+:deep(.transaction-details-row .transaction-list .header) {
+  display: none;
+}
+/* Стилизация контейнера таблицы внутри TransactionList */
+:deep(.transaction-details-row .transactions-table-container) {
+  border-top: 1px solid #eee; /* Линия над таблицей транзакций */
+  margin-top: 10px; /* Отступ от возможного (скрытого) заголовка */
+}
+
+
+/* === Стили для оставшихся модальных окон === */
 .modal-content.wide {
-    max-width: 70%; /* Шире для списка транзакций */
+    max-width: 70%; /* Шире для списка транзакций (Если это окно все еще используется) */
 }
 .modal-content.small {
-    max-width: 300px; /* Узкое для изменения ставки */
+    max-width: 350px; /* Чуть шире для формы ставки */
 }
+
+/* Форма изменения ставки */
 .change-rate-form {
     display: flex;
     flex-direction: column;
     gap: 15px;
+    padding: 10px 5px; /* Небольшой внутренний отступ */
 }
 .change-rate-form label {
-    margin-bottom: -10px;
+    margin-bottom: -10px; /* Меньше отступ */
     font-weight: 500;
+    font-size: 0.95em;
 }
 .change-rate-form input {
-    padding: 8px;
-    border: 1px solid #ccc;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
     border-radius: 4px;
+    font-size: 1em;
+}
+.change-rate-form input:focus {
+    outline: none;
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 .change-rate-form .modal-actions {
     display: flex;
@@ -379,25 +562,34 @@ tfoot .totals-cell .projected-balance {
     gap: 10px;
     margin-top: 10px;
 }
-.change-rate-form .save-button, .change-rate-form .cancel-button {
+.change-rate-form .save-button,
+.change-rate-form .cancel-button {
     padding: 8px 15px;
     border-radius: 4px;
     cursor: pointer;
+    border: none;
+    font-weight: 500;
+    transition: background-color 0.2s, opacity 0.2s;
 }
 .change-rate-form .save-button {
-    background-color: #28a745;
+    background-color: #198754; /* Зеленый */
     color: white;
-    border: none;
+}
+.change-rate-form .save-button:hover {
+    background-color: #157347;
 }
 .change-rate-form .cancel-button {
-    background-color: #6c757d;
+    background-color: #6c757d; /* Серый */
     color: white;
-    border: none;
+}
+.change-rate-form .cancel-button:hover {
+    background-color: #5c636a;
 }
 .change-rate-form .error {
     color: #dc3545;
     font-size: 0.9em;
     margin-top: -5px;
+    text-align: center;
 }
 
 </style>
@@ -423,11 +615,12 @@ export default {
       accounts: [],
     loading: true,
     error: null,
-    showingTransactionList: false,
+    // showingTransactionList: false,
     showingAddTransaction: false,
     showingCreateAccount: false,
     showingGlobalRateModal: false,
-    selectedAccountForModal: null,
+    // selectedAccountForModal: null,
+    expandedAccountId: null, // ID аккаунта, чьи транзакции сейчас показаны, null если все свернуты
     newInterestRate: null,
     rateChangeError: null,
     };
@@ -591,17 +784,30 @@ formatBalance(amount) {
 
 // --- Управление Модальными Окнами ---
 
-showTransactions(accountId, accountName) {
-      this.selectedAccountForModal = { id: accountId, name: accountName };
-      this.showingTransactionList = true;
-      this.showingAddTransaction = false;
-      this.showingCreateAccount = false;
-      this.showingGlobalRateModal = false; 
-    },
-    closeTransactionList() {
-       this.showingTransactionList = false;
-       this.selectedAccountForModal = null;
-    },
+    //showTransactions(accountId, accountName) {
+    //  this.selectedAccountForModal = { id: accountId, name: accountName };
+    //  this.showingTransactionList = true;
+    //  this.showingAddTransaction = false;
+    //  this.showingCreateAccount = false;
+    //  this.showingGlobalRateModal = false; 
+    //},
+
+    toggleTransactions(accountId) {
+    if (this.expandedAccountId === accountId) {
+      // Если кликнули по уже раскрытому счету, сворачиваем
+      this.expandedAccountId = null;
+    } else {
+      // Раскрываем новый счет (старый автоматически свернется)
+      this.expandedAccountId = accountId;
+      // Важно: Не нужно вызывать fetchTransactions здесь,
+      // так как TransactionList сам загрузит свои данные при отрисовке
+    }
+    },    
+
+    // closeTransactionList() {
+    //   this.showingTransactionList = false;
+    //   this.selectedAccountForModal = null;
+    //},
 
     showAddTransaction(accountId, accountName) { // Добавим имя для заголовка
       // Ищем полный объект аккаунта, чтобы показать имя в заголовке
@@ -627,11 +833,6 @@ showTransactions(accountId, accountName) {
       this.showingCreateAccount = false;
     },
 
-    // --- УДАЛЕНЫ методы для старого окна ставки ---
-    // showChangeRateModal(account) { ... }
-    // closeChangeRateModal() { ... }
-
-    // --- ДОБАВЛЕНЫ методы для нового глобального окна ставки ---
     showGlobalRateModal() {
       // Пытаемся получить текущую ставку месяца для предзаполнения поля
       this.fetchCurrentMonthRate(); // Вызываем вспомогательный метод
