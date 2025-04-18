@@ -18,13 +18,31 @@
         >
           %
         </button>
+        <button
+          class="action-button log-level-button"
+          @click="openLogLevelSelector"
+          title="Настроить уровень логирования"
+        >
+          📝
+        </button>
+        <transition name="fade">
+            <div v-if="showLogLevelSelector" class="log-level-selector">
+              <select id="log-level" v-model="logLevel">
+                <option value="INFO">INFO</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="WARNING">WARNING</option>
+              </select>
+            </div>
+          </transition>
       </div>
     </div>
 
     <!-- Состояния загрузки и ошибки -->
-    <div v-if="loading" class="loading">Загрузка счетов...</div>
-    <div v-else-if="error" class="error">
-      Ошибка при загрузке данных: {{ error }}
+    <div v-if="loading" class="loading">
+      Загрузка счетов...
+      <div class="debug-info" style="font-size: 0.8em; color: #999; margin-top: 10px;">
+        Время начала загрузки: {{ new Date().toLocaleTimeString() }}
+      </div>
     </div>
 
     <!-- Основной контент -->
@@ -346,89 +364,59 @@
 
 <style scoped>
 /* === Общие стили и адаптивность === */
+.account-actions {
+  border-top: 1px solid #f1f1f1; /* Тонкая линия над кнопками */
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end; /* Кнопки справа */
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.account-card {
+  background-color: #fff;
+  border: 1px solid #e9ecef; /* Светлая граница */
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* Мягкая тень */
+  padding: 15px; /* Внутренний отступ */
+}
+
+.account-header {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 6px; /* Отступ под шапкой карточки */
+  /* border-bottom: 1px solid #eee; */ /* Убрал границу, чтобы не перегружать */
+  /* margin-bottom: 10px; */
+}
+
+.account-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Многоточие для длинных имен */
+  white-space: nowrap;
+}
+
+.account-name-container {
+  align-items: center;
+  display: flex;
+  gap: 8px; /* Отступ между элементами имени */
+  /* flex-grow: 1; */ /* Чтобы занимало доступное место */
+  overflow: hidden; /* Обрезать длинное имя */
+}
+
 .accounts-container {
-  padding: 1px; /* Предотвращает схлопывание внешних отступов дочерних элементов */
   max-width: 100%;
   overflow-x: hidden; /* Предотвращает случайный горизонтальный скролл страницы */
+  padding: 1px; /* Предотвращает схлопывание внешних отступов дочерних элементов */
 }
 
-.loading, .error {
-  text-align: center;
-  padding: 20px 15px; /* Добавлен горизонтальный паддинг */
-  font-size: 1em;
-  margin: 15px 0;
+.accounts-desktop {
+  display: none;
 }
 
-.error {
-  color: #dc3545;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
-}
-
-/* --- Шапка страницы --- */
-.header-row {
-  display: flex;
-  justify-content: space-between; /* Заголовок слева, кнопки справа */
-  align-items: center;
-  margin-bottom: 20px; /* Больше отступ снизу */
-  flex-wrap: wrap; /* Перенос кнопок на новую строку на мал. экранах */
-  gap: 10px; /* Отступ между заголовком и кнопками при переносе */
-  padding: 0 17px; /* Отступы по бокам для мобильных */
-}
-
-.page-title {
-  margin: 0;
-  font-size: 1.6rem; /* Чуть больше */
-  font-weight: 600;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px; /* Увеличен отступ между кнопками */
-}
-
-/* === Унифицированные стили для Action Button === */
-.action-button,
-:deep(.action-button) /* Для кнопок внутри DeleteAccount */
-{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;   /* Стандартный размер */
-  height: 32px;  /* Стандартный размер */
-  padding: 0;
-  margin-right: 10px;
-  box-sizing: border-box;
-  border: 1px solid;
-  border-radius: 5px; /* Чуть больше скругления */
-  background-color: #fff;
-  font-size: 1.4em; /* Размер иконки/символа */
-  font-weight: normal;
-  line-height: 1;
-  text-align: center;
-  vertical-align: middle;
-  cursor: pointer;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-  overflow: hidden;
-  flex-shrink: 0; /* Предотвращает сжатие кнопок в flex контейнере */
-}
-
-/* Цвета кнопок */
-.action-button.create-button { border-color: #198754; color: #198754; }
-.action-button.create-button:hover { background-color: #198754; color: white; }
-
-.action-button.rate-button { border-color: #ffc107; color: #ffc107; }
-.action-button.rate-button:hover { background-color: #ffc107; color: white; }
-
-.action-button.transaction-button { border-color: #0dcaf0; color: #0dcaf0; }
-.action-button.transaction-button:hover { background-color: #0dcaf0; color: white; }
-
-:deep(.action-button.delete-button) { border-color: #dc3545; color: #dc3545; }
-:deep(.action-button.delete-button:hover) { background-color: #dc3545; color: white; }
-
-
-/* === Мобильный вид (карточки) - По умолчанию === */
 .accounts-mobile {
   display: flex;
   flex-direction: column;
@@ -436,174 +424,99 @@
   padding: 0 3px; /* Небольшие отступы по бокам */
 }
 
-.account-card {
-  background-color: #fff;
-  border-radius: 5px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* Мягкая тень */
-  border: 1px solid #e9ecef; /* Светлая граница */
-  padding: 15px; /* Внутренний отступ */
-}
-
-.totals-card {
-  background-color: #f8f9fa;
-  border-color: #dee2e6;
-  box-shadow: none;
-}
-.totals-card .account-name {
-    font-weight: bold;
-}
-
-.account-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  padding-bottom: 6px; /* Отступ под шапкой карточки */
-  /* border-bottom: 1px solid #eee; */ /* Убрал границу, чтобы не перегружать */
-  /* margin-bottom: 10px; */
-}
-
-.account-name-container {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* Отступ между элементами имени */
-  /* flex-grow: 1; */ /* Чтобы занимало доступное место */
-   overflow: hidden; /* Обрезать длинное имя */
-}
-
-.account-name {
-  font-weight: 600;
-  font-size: 1.1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; /* Многоточие для длинных имен */
-}
-
-.interest-rate-label {
-  font-size: 0.8em;
-  color: #6c757d;
-  font-weight: normal;
-  white-space: nowrap;
-  flex-shrink: 0; /* Не сжимать */
-}
-
-.expand-icon {
-  font-size: 0.8em;
-  color: #888;
-  flex-shrink: 0; /* Не сжимать */
-}
-
-.balance-container {
-  text-align: right;
-  flex-shrink: 0; /* Не сжимать баланс */
-  padding-left: 10px; /* Отступ слева от баланса */
-}
-
-.actual-balance {
-  font-weight: 600;
-  font-size: 1.1rem; /* Размер как у имени счета */
-  white-space: nowrap;
-}
-
-.actual-balance.negative {
-  color: #dc3545;
-}
-
-.projected-balance {
-  font-size: 0.9em;
-  color: #0d6efd;
-  white-space: nowrap;
-}
-
-.account-actions {
-  display: flex;
-  justify-content: flex-end; /* Кнопки справа */
-  gap: 10px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #f1f1f1; /* Тонкая линия над кнопками */
-}
-
-/* --- История и Транзакции в мобильном виде --- */
-.history-section,
-.transactions-wrapper {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px dashed #e0e0e0; /* Разделитель для доп. секций */
-}
-
-/* Обёртка для анимации раскрытия (применяется и к истории, и к транзакциям) */
-.details-wrapper {
-  overflow: hidden;
-  max-height: 0; /* Начальное состояние - скрыто */
-  transition: max-height 0.4s ease-out; /* Анимация */
-}
-/* Примечание: нужно обернуть .history-grid и TransactionList в .details-wrapper в шаблоне */
-/* Либо применить стиль max-height напрямую к .history-section и .transactions-wrapper */
-
-.history-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); /* Адаптивные колонки */
-  gap: 10px;
-}
-
-.month-card {
-  background-color: #f8f9fa;
-  border-radius: 6px;
-  padding: 8px;
-  text-align: center;
-  border: 1px solid #eee;
-}
-
-.month-name {
-  font-size: 0.8em;
-  color: #495057;
-  margin-bottom: 5px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.month-data { display: flex; flex-direction: column; gap: 2px; }
-.month-data .balance { font-weight: 500; font-size: 0.9em; }
-.month-data .interest { font-size: 0.8em; color: #198754; }
-.month-data-na { color: #adb5bd; font-style: italic; font-size: 0.9em; }
-
-/* --- Стили для TransactionList внутри мобильной карточки --- */
-:deep(.transactions-wrapper .transaction-list) {
-  /* Убираем лишние отступы/рамки у самого компонента TransactionList */
-  padding: 0;
-  border: none;
-  box-shadow: none;
-}
-:deep(.transactions-wrapper .transaction-list .transactions-table-container) {
-   /* Контейнер таблицы внутри */
-   border-top: 1px solid #eee;
-   margin-top: 0; /* Убираем лишний отступ */
-   max-height: 300px; /* Ограничиваем высоту списка транзакций */
-   padding: 0; /* Убираем паддинг справа, если он не нужен в мобильной версии */
-}
-:deep(.transactions-wrapper .transaction-list .header) {
-    display: none; /* Скрываем заголовок внутри */
-}
-
-/* === Десктопный вид (таблица) - Скрыт по умолчанию === */
-.accounts-desktop {
-  display: none;
-}
-
 .accounts-table {
-  width: 100%;
   border-collapse: collapse;
   margin-top: 10px; /* Отступ сверху */
+  width: 100%;
 }
 
-.accounts-table th,
-.accounts-table td {
+.accounts-table .actions { 
+  text-align: center; 
+  white-space: nowrap; 
+  width: 100px; 
+}
+
+.accounts-table .actual-balance { 
+  font-weight: 600; 
+}
+
+.accounts-table .balance-container { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 3px; 
+  text-align: right; 
+}
+
+.accounts-table .details-wrapper { /* Анимация для десктопа */
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease-out;
+}
+
+.accounts-table .historical-cell { 
+  min-width: 100px; 
+  text-align: right; 
+}
+
+.accounts-table .monthly-data .balance { 
+  font-weight: 500; 
+}
+
+.accounts-table .monthly-data .interest { 
+  color: #198754; 
+  font-size: 0.85em; 
+}
+
+.accounts-table .monthly-data-na { 
+  color: #adb5bd; 
+  font-style: italic; 
+  text-align: center; 
+}
+
+.accounts-table .projected-balance { 
+  color: #0d6efd; 
+  font-size: 0.9em; 
+}
+
+.accounts-table .transaction-details-row td {
+  background-color: #fdfdfd;
+  border-bottom: 1px solid #dee2e6; /* Граница снизу как у обычных строк */
+  border-top: 1px dashed #e0e0e0;
+  padding: 0;
+}
+
+.accounts-table td.negative .actual-balance { 
+  color: #dc3545; 
+}
+
+.accounts-table td,
+.accounts-table th {
+  border-bottom: 1px solid #dee2e6;
   padding: 10px 12px;
   vertical-align: middle;
-  border-bottom: 1px solid #dee2e6;
+}
+
+.accounts-table tfoot .totals-cell { 
+  text-align: right; 
+}
+
+.accounts-table tfoot .totals-cell .balance-container,
+.accounts-table tfoot .totals-cell .monthly-data { 
+  text-align: right; 
+}
+
+.accounts-table tfoot .totals-cell .monthly-data .interest { 
+  color: #198754; 
+}
+
+.accounts-table tfoot .totals-cell .projected-balance { 
+  color: #0d6efd; 
+}
+
+.accounts-table tfoot .totals-row td {
+  background-color: #f8f9fa;
+  border-top: 2px solid #dee2e6;
+  font-weight: bold;
 }
 
 .accounts-table th {
@@ -613,88 +526,284 @@
   white-space: nowrap;
 }
 
-.accounts-table th:nth-child(1) { text-align: left; }
-.accounts-table th:nth-child(n+2) { text-align: right; }
-.accounts-table th:last-child { text-align: center; }
-
-.accounts-table .historical-cell { min-width: 100px; text-align: right; }
-.accounts-table .monthly-data .balance { font-weight: 500; }
-.accounts-table .monthly-data .interest { font-size: 0.85em; color: #198754; }
-.accounts-table .monthly-data-na { color: #adb5bd; text-align: center; font-style: italic; }
-
-.accounts-table .balance-container { display: flex; flex-direction: column; gap: 3px; text-align: right; }
-.accounts-table .actual-balance { font-weight: 600; }
-.accounts-table .projected-balance { font-size: 0.9em; color: #0d6efd; }
-.accounts-table td.negative .actual-balance { color: #dc3545; }
-
-.accounts-table .actions { text-align: center; white-space: nowrap; width: 100px; }
-
-/* --- Стили для раскрывающейся строки транзакций в ДЕСКТОПНОЙ таблице --- */
-/* (Эти стили были пропущены в предыдущем варианте) */
-.accounts-table .transaction-details-row td {
-  padding: 0;
-  background-color: #fdfdfd;
-  border-top: 1px dashed #e0e0e0;
-  border-bottom: 1px solid #dee2e6; /* Граница снизу как у обычных строк */
+.accounts-table th:last-child { 
+  text-align: center; 
 }
 
-.accounts-table .details-wrapper { /* Анимация для десктопа */
+.accounts-table th:nth-child(1) { 
+  text-align: left; 
+}
+
+.accounts-table th:nth-child(n+2) { 
+  text-align: right; 
+}
+
+.action-button,
+:deep(.action-button) /* Для кнопок внутри DeleteAccount */
+{
+  align-items: center;
+  background-color: #fff;
+  border: 1px solid;
+  border-radius: 5px; /* Чуть больше скругления */
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0; /* Предотвращает сжатие кнопок в flex контейнере */
+  font-size: 1.4em; /* Размер иконки/символа */
+  font-weight: normal;
+  height: 32px;  /* Стандартный размер */
+  justify-content: center;
+  line-height: 1;
+  margin-right: 10px;
   overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.4s ease-out;
+  padding: 0;
+  text-align: center;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  vertical-align: middle;
+  width: 32px;   /* Стандартный размер */
 }
 
-:deep(.accounts-table .transaction-details-row .transaction-list) {
-  padding: 15px; /* Внутренний отступ */
+.action-button.create-button { 
+  border-color: #198754; 
+  color: #198754; 
+}
+
+.action-button.create-button:hover { 
+  background-color: #198754; 
+  color: white; 
+}
+
+.action-button.rate-button { 
+  border-color: #ffc107; 
+  color: #ffc107; 
+}
+
+.action-button.rate-button:hover { 
+  background-color: #ffc107; 
+  color: white; 
+}
+
+.action-button.transaction-button { 
+  border-color: #0dcaf0; 
+  color: #0dcaf0; 
+}
+
+.action-button.transaction-button:hover { 
+  background-color: #0dcaf0; 
+  color: white; 
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px; /* Увеличен отступ между кнопками */
+}
+
+.actual-balance {
+  font-size: 1.1rem; /* Размер как у имени счета */
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.actual-balance.negative {
+  color: #dc3545;
+}
+
+.balance-container {
+  flex-shrink: 0; /* Не сжимать баланс */
+  padding-left: 10px; /* Отступ слева от баланса */
+  text-align: right;
+}
+
+.change-rate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px; /* Увеличены отступы */
+}
+
+.change-rate-form .cancel-button { 
+  background-color: #6c757d; 
+  border: none; 
+  border-radius: 5px; 
+  color: white; 
+  cursor: pointer; 
+  font-weight: 500; 
+  padding: 9px 18px; 
+}
+
+.change-rate-form .error { 
+  color: #dc3545; 
+  font-size: 0.9em; 
+  margin-top: 5px;
+  text-align: center; 
+}
+
+.change-rate-form input {
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  font-size: 1em;
+  padding: 10px 12px;
+}
+
+.change-rate-form input:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  outline: none;
+}
+
+.change-rate-form label { 
+  font-weight: 500; 
+  margin-bottom: -8px; 
+}
+
+.change-rate-form .modal-actions { 
+  display: flex; 
+  gap: 10px; 
+  justify-content: flex-end; 
+  margin-top: 15px; 
+}
+
+.change-rate-form .save-button { 
+  background-color: #198754; 
+  border: none; 
+  border-radius: 5px; 
+  color: white; 
+  cursor: pointer; 
+  font-weight: 500; 
+  padding: 9px 18px; 
+}
+
+.close-button {
+  background: none;
   border: none;
-  box-shadow: none;
-}
-:deep(.accounts-table .transaction-details-row .transaction-list .header) {
-  display: none;
-}
-:deep(.accounts-table .transaction-details-row .transactions-table-container) {
-  border-top: 1px solid #eee;
-  margin-top: 10px;
-}
-
-/* --- Подвал таблицы (Totals) --- */
-.accounts-table tfoot .totals-row td {
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 1.6rem; /* Крупнее крестик */
   font-weight: bold;
-  border-top: 2px solid #dee2e6;
-  background-color: #f8f9fa;
+  line-height: 1;
+  padding: 0 5px; /* Небольшой паддинг для клика */
 }
-.accounts-table tfoot .totals-cell { text-align: right; }
-.accounts-table tfoot .totals-cell .balance-container,
-.accounts-table tfoot .totals-cell .monthly-data { text-align: right; }
-.accounts-table tfoot .totals-cell .monthly-data .interest { color: #198754; }
-.accounts-table tfoot .totals-cell .projected-balance { color: #0d6efd; }
 
-/* === Модальные окна (Общие стили) === */
+.close-button:hover {
+  color: #343a40;
+}
+
+.details-wrapper {
+  max-height: 0; /* Начальное состояние - скрыто */
+  overflow: hidden;
+  transition: max-height 0.4s ease-out; /* Анимация */
+}
+
+.error {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  color: #dc3545;
+}
+
+.expand-icon {
+  color: #888;
+  flex-shrink: 0; /* Не сжимать */
+  font-size: 0.8em;
+}
+
+.fade-enter, .fade-leave-to {
+  opacity: 0;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.header-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap; /* Перенос кнопок на новую строку на мал. экранах */
+  gap: 10px; /* Отступ между заголовком и кнопками при переносе */
+  justify-content: space-between; /* Заголовок слева, кнопки справа */
+  margin-bottom: 20px; /* Больше отступ снизу */
+  padding: 0 17px; /* Отступы по бокам для мобильных */
+}
+
+.history-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); /* Адаптивные колонки */
+}
+
+.history-section,
+.transactions-wrapper {
+  border-top: 1px dashed #e0e0e0; /* Разделитель для доп. секций */
+  margin-top: 15px;
+  padding-top: 15px;
+}
+
+.interest-rate-label {
+  color: #6c757d;
+  flex-shrink: 0; /* Не сжимать */
+  font-size: 0.8em;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.loading, .error {
+  font-size: 1em;
+  margin: 15px 0;
+  padding: 20px 15px; /* Добавлен горизонтальный паддинг */
+  text-align: center;
+}
+
+.log-level-container {
+  display: inline-block;
+  position: relative;
+}
+
+.log-level-selector {
+  background-color: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-top: 5px;
+  min-width: 100px;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+}
+
+.log-level-selector select {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 5px;
+  width: 100%;
+}
+
 .modal {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6); /* Чуть темнее фон */
+  box-sizing: border-box;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  padding: 15px; /* Отступы, чтобы модалка не прилипала к краям */
   position: fixed;
   top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6); /* Чуть темнее фон */
-  display: flex;
-  justify-content: center;
-  align-items: center;
   z-index: 1000;
-  padding: 15px; /* Отступы, чтобы модалка не прилипала к краям */
-  box-sizing: border-box;
 }
 
 .modal-content {
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); /* Заметнее тень */
-  width: 100%; /* Ширина по умолчанию */
-  max-width: 500px; /* Макс ширина по умолчанию */
-  max-height: calc(100vh - 40px); /* Макс высота с отступами */
-  overflow-y: auto; /* Внутренний скролл, если контент не влезает */
   display: flex; /* Чтобы flex-direction работал */
   flex-direction: column; /* Шапка и контент друг под другом */
+  max-height: calc(100vh - 40px); /* Макс высота с отступами */
+  max-width: 500px; /* Макс ширина по умолчанию */
+  overflow-y: auto; /* Внутренний скролл, если контент не влезает */
+  width: 100%; /* Ширина по умолчанию */
 }
 
 .modal-content.small {
@@ -702,60 +811,125 @@
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 15px; /* Уменьшен вертикальный паддинг */
   border-bottom: 1px solid #dee2e6;
+  display: flex;
   flex-shrink: 0; /* Шапка не должна сжиматься */
+  justify-content: space-between;
+  padding: 12px 15px; /* Уменьшен вертикальный паддинг */
 }
 
 .modal-header h3 {
-  margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
+  margin: 0;
 }
 
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.6rem; /* Крупнее крестик */
+.month-card {
+  background-color: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+
+.month-data { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 2px; 
+}
+
+.month-data .balance { 
+  font-size: 0.9em; 
+  font-weight: 500; 
+}
+
+.month-data .interest { 
+  color: #198754; 
+  font-size: 0.8em; 
+}
+
+.month-data-na { 
+  color: #adb5bd; 
+  font-size: 0.9em; 
+  font-style: italic; 
+}
+
+.month-name {
+  color: #495057;
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-bottom: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-title {
+  font-size: 1.6rem; /* Чуть больше */
+  font-weight: 600;
+  margin: 0;
+}
+
+.projected-balance {
+  color: #0d6efd;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.totals-card {
+  background-color: #f8f9fa;
+  border-color: #dee2e6;
+  box-shadow: none;
+}
+
+.totals-card .account-name {
   font-weight: bold;
-  line-height: 1;
-  cursor: pointer;
-  color: #6c757d;
-  padding: 0 5px; /* Небольшой паддинг для клика */
-}
-.close-button:hover {
-    color: #343a40;
 }
 
-/* --- Форма изменения ставки в модалке --- */
-.change-rate-form {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 20px; /* Увеличены отступы */
+:deep(.action-button.delete-button) { 
+  border-color: #dc3545; 
+  color: #dc3545; 
 }
-.change-rate-form label { font-weight: 500; margin-bottom: -8px; }
-.change-rate-form input {
-  padding: 10px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 5px;
-  font-size: 1em;
-}
-.change-rate-form input:focus {
-  outline: none;
-  border-color: #86b7fe;
-  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
-.change-rate-form .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
-.change-rate-form .save-button,
-.change-rate-form .cancel-button { padding: 9px 18px; border-radius: 5px; cursor: pointer; border: none; font-weight: 500; }
-.change-rate-form .save-button { background-color: #198754; color: white; }
-.change-rate-form .cancel-button { background-color: #6c757d; color: white; }
-.change-rate-form .error { color: #dc3545; font-size: 0.9em; text-align: center; margin-top: 5px;}
 
+:deep(.action-button.delete-button:hover) { 
+  background-color: #dc3545; 
+  color: white; 
+}
+
+:deep(.accounts-table .transaction-details-row .transaction-list) {
+  border: none;
+  box-shadow: none;
+  padding: 15px; /* Внутренний отступ */
+}
+
+:deep(.accounts-table .transaction-details-row .transaction-list .header) {
+  display: none;
+}
+
+:deep(.accounts-table .transaction-details-row .transactions-table-container) {
+  border-top: 1px solid #eee;
+  margin-top: 10px;
+}
+
+:deep(.transactions-wrapper .transaction-list) {
+  /* Убираем лишние отступы/рамки у самого компонента TransactionList */
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+:deep(.transactions-wrapper .transaction-list .header) {
+  display: none; /* Скрываем заголовок внутри */
+}
+
+:deep(.transactions-wrapper .transaction-list .transactions-table-container) {
+  /* Контейнер таблицы внутри */
+  border-top: 1px solid #eee;
+  margin-top: 0; /* Убираем лишний отступ */
+  max-height: 300px; /* Ограничиваем высоту списка транзакций */
+  padding: 0; /* Убираем паддинг справа, если он не нужен в мобильной версии */
+}
 
 /* === Медиа-запросы для переключения Desktop/Mobile === */
 @media (min-width: 992px) { /* Используем breakpoint побольше (lg) для переключения на таблицу */
@@ -763,16 +937,16 @@
     padding: 10px 20px; /* Добавляем отступы на больших экранах */
   }
 
-  .header-row {
-      padding: 0; /* Убираем боковые отступы шапки на десктопе */
+  .accounts-desktop {
+    display: block; /* Показываем таблицу на десктопе */
   }
 
   .accounts-mobile {
     display: none; /* Скрываем карточки на десктопе */
   }
 
-  .accounts-desktop {
-    display: block; /* Показываем таблицу на десктопе */
+  .header-row {
+    padding: 0; /* Убираем боковые отступы шапки на десктопе */
   }
 
   .modal-content {
@@ -783,36 +957,41 @@
 
 /* Дополнительная адаптация для очень маленьких экранов */
 @media (max-width: 400px) {
-  .page-title {
-      font-size: 1.4rem; /* Уменьшаем заголовок */
-  }
-  .history-grid {
-    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); /* Еще меньше колонки истории */
-    gap: 8px;
-  }
-
   .account-header {
     flex-wrap: wrap; /* Разрешаем перенос баланса под имя */
     gap: 5px;
   }
-  .balance-container {
-      /* width: 100%; */ /* Можно растянуть баланс */
-      text-align: right; /* Убедимся, что он справа */
-      padding-left: 0;
-  }
-  .account-name {
-      font-size: 1.0rem; /* Чуть меньше имя */
-  }
-   .actual-balance {
-       font-size: 1.0rem;
-   }
 
-   .modal-content {
-       max-width: calc(100% - 20px); /* Модалка чуть уже */
-   }
-   .modal-header h3 {
-       font-size: 1.1rem;
-   }
+  .account-name {
+    font-size: 1.0rem; /* Чуть меньше имя */
+  }
+
+  .actual-balance {
+    font-size: 1.0rem;
+  }
+
+  .balance-container {
+    /* width: 100%; */ /* Можно растянуть баланс */
+    padding-left: 0;
+    text-align: right; /* Убедимся, что он справа */
+  }
+
+  .history-grid {
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); /* Еще меньше колонки истории */
+  }
+
+  .modal-content {
+    max-width: calc(100% - 20px); /* Модалка чуть уже */
+  }
+
+  .modal-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .page-title {
+    font-size: 1.4rem; /* Уменьшаем заголовок */
+  }
 }
 </style>
 
@@ -843,6 +1022,8 @@ export default {
       selectedAccountForModal: null, // Для модальных окон
       newInterestRate: null,
       rateChangeError: null,
+      logLevel: 'INFO', // Уровень логирования
+      showLogLevelSelector: false, // индикатор видимости меню выбора уровня логирования
     };
   },
   computed: {
@@ -923,6 +1104,24 @@ export default {
     }
   },
   methods: {
+    openLogLevelSelector() {
+      this.showLogLevelSelector = !this.showLogLevelSelector;
+    },
+
+    log(message, level) {
+      if (
+        (level === 'DEBUG' && this.logLevel !== 'DEBUG') ||
+        (level === 'WARNING' && this.logLevel === 'INFO')
+      ) return;
+
+      switch (level) {
+        case 'INFO': console.info(message); break;
+        case 'DEBUG': console.debug(message); break;
+        case 'WARNING': console.warn(message); break;
+        default: console.log(message);
+      }
+    },
+      
     /**
      * Форматирует число как валюту без символа валюты.
      */
@@ -982,72 +1181,79 @@ export default {
     /**
      * Показывает модальное окно добавления транзакции
      */
-    showAddTransaction(accountId, accountName) {
+     showAddTransaction(accountId, accountName) {
       this.selectedAccountForModal = this.accounts.find(acc => acc.id === accountId) || 
-                                    { id: accountId, name: accountName || 'Счет' };
+                                     { id: accountId, name: accountName || 'Счёт' };
       this.showingAddTransaction = true;
       this.showingCreateAccount = false;
       this.showingGlobalRateModal = false;
+      this.log("Открытие окна добавления транзакции.", 'INFO');
     },
     
     /**
      * Закрывает модальное окно добавления транзакции
      */
-    closeAddTransaction() {
+     closeAddTransaction() {
       this.showingAddTransaction = false;
       this.selectedAccountForModal = null;
+      this.log("Закрытие окна добавления транзакции.", 'INFO');
     },
     
     /**
      * Показывает модальное окно создания счета
      */
-    showCreateAccount() {
+     showCreateAccount() {
       this.showingCreateAccount = true;
       this.showingAddTransaction = false;
       this.showingGlobalRateModal = false;
-      this.selectedAccountForModal = null;
+      this.log("Открытие окна создания счёта.", 'INFO');
     },
     
     /**
      * Закрывает модальное окно создания счета
      */
-    closeCreateAccount() {
+     closeCreateAccount() {
       this.showingCreateAccount = false;
+      this.log("Закрытие окна создания счёта.", 'INFO');
     },
     
     /**
      * Показывает модальное окно изменения глобальной ставки
      */
-    showGlobalRateModal() {
+     showGlobalRateModal() {
       this.fetchCurrentMonthRate();
       this.rateChangeError = null;
       this.showingGlobalRateModal = true;
       this.showingAddTransaction = false;
       this.showingCreateAccount = false;
+      this.log("Открытие окна изменения ставки.", 'INFO');
     },
     
     /**
      * Закрывает модальное окно изменения глобальной ставки
      */
-    closeGlobalRateModal() {
+     closeGlobalRateModal() {
       this.showingGlobalRateModal = false;
       this.newInterestRate = null;
       this.rateChangeError = null;
+      this.log("Закрытие окна изменения ставки.", 'INFO');
     },
     
     /**
      * Получает текущую ставку месяца для предзаполнения поля
      */
-    async fetchCurrentMonthRate() {
+     async fetchCurrentMonthRate() {
       try {
-         const response = await axios.get(`/api/interest-rate/${this.currentMonthStr}`);
+        const response = await axios.get(`/api/interest-rate/${this.currentMonthStr}`);
         if (response.data && response.data.rate !== undefined) {
           this.newInterestRate = response.data.rate;
+          this.log("Получена текущая ставка месяца.", 'INFO');
         } else {
           this.newInterestRate = null;
+          this.log("Не удалось получить текущую ставку месяца.", 'WARNING');
         }
       } catch (error) {
-        console.error("Error fetching current month rate:", error);
+        this.log("Ошибка при получении текущей ставки месяца.", 'ERROR');
         this.newInterestRate = null;
       }
     },
@@ -1055,55 +1261,102 @@ export default {
     /**
      * Обработчик после добавления транзакции или создания счета
      */
-    async onActionComplete() {
+     async onActionComplete() {
       this.closeAddTransaction();
       this.closeCreateAccount();
       await this.loadAccounts();
+      this.log("Операция выполнена успешно.", 'INFO');
     },
     
     /**
      * Сохраняет глобальную процентную ставку
      */
-    async saveGlobalInterestRate() {
+     async saveGlobalInterestRate() {
       if (this.newInterestRate === null || this.newInterestRate === undefined || this.newInterestRate < 0) {
         this.rateChangeError = "Пожалуйста, введите корректную неотрицательную ставку.";
+        this.log("Неверная ставка введена.", 'WARNING');
         return;
       }
-      
+
       this.rateChangeError = null;
       const ratePayload = { rate: this.newInterestRate };
       const monthToUpdate = this.currentMonthStr;
-      
+
       try {
         await axios.put(`/api/interest-rate/${monthToUpdate}`, ratePayload);
         this.closeGlobalRateModal();
         await this.loadAccounts();
+        this.log("Ставка сохранена успешно.", 'INFO');
       } catch (error) {
-        console.error("Error updating global interest rate:", error);
+        this.log("Ошибка при сохранении ставки.", 'ERROR');
         this.rateChangeError = 'Ошибка при сохранении ставки: ' + 
-                              (error.response?.data?.detail || error.message);
+                             (error.response?.data?.detail || error.message);
       }
     },
     
     /**
      * Загружает список счетов с сервера
      */
-    async loadAccounts() {
+     async loadAccounts() {
       this.loading = true;
       this.error = null;
-      
+
+      setTimeout(() => {
+        if (this.loading) {
+          this.log('Force ending loading state after timeout.', 'INFO');
+          this.loading = false;
+          this.error = 'Request timed out. Please check server connectivity.';
+        }
+      }, 10000); // 10 секунд таймаут
+
       try {
+        const startTime = performance.now();
         const response = await axios.get('/api/accounts');
+        const endTime = performance.now();
+
+        this.log(`Запрос выполнен за ${(endTime - startTime).toFixed(2)}ms`, 'INFO');
+        this.log("Ответ API:", response.status, response.statusText, 'INFO');
+
+        if (response.data) {
+          this.log(`Получено ${Array.isArray(response.data) ? response.data.length : 'не массив'} записей`, 'INFO');
+          if (Array.isArray(response.data) && response.data.length > 0) {
+            this.log("Пример первой записи:", JSON.stringify(response.data[0], null, 2), 'DEBUG');
+          } else {
+            this.log("Данные ответа:", response.data, 'DEBUG');
+          }
+        } else {
+          this.log("Ответ API не содержит данных", 'WARNING');
+        }
+
         this.accounts = response.data;
       } catch (error) {
-        console.error("Error loading accounts:", error);
+        this.log("Ошибка при загрузке счетов.", 'ERROR');
+        this.log("Тип ошибки:", error.name, 'ERROR');
+        this.log("Сообщение:", error.message, 'ERROR');
+
+        if (error.response) {
+          this.log("Статус ответа:", error.response.status, 'ERROR');
+          this.log("Данные ответа:", error.response.data, 'ERROR');
+        } else if (error.request) {
+          this.log("Запрос был отправлен, но ответ не получен", 'ERROR');
+        } else {
+          this.log("Ошибка при настройке запроса", 'ERROR');
+        }
+
         this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
         this.accounts = [];
       } finally {
         this.loading = false;
+        this.log("Состояние компонента:", {
+          loading: this.loading,
+          error: this.error,
+          accountsCount: Array.isArray(this.accounts) ? this.accounts.length : 'не массив'
+        }, 'INFO');
       }
     }
+
   },
+
   async created() {
     await this.loadAccounts();
   }

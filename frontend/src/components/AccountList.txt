@@ -22,10 +22,12 @@
     </div>
 
     <!-- Состояния загрузки и ошибки -->
-    <div v-if="loading" class="loading">Загрузка счетов...</div>
-    <div v-else-if="error" class="error">
-      Ошибка при загрузке данных: {{ error }}
-    </div>
+    <div v-if="loading" class="loading">
+  Загрузка счетов...
+  <div class="debug-info" style="font-size: 0.8em; color: #999; margin-top: 10px;">
+    Время начала загрузки: {{ new Date().toLocaleTimeString() }}
+  </div>
+</div>
 
     <!-- Основной контент -->
     <div v-else>
@@ -346,7 +348,6 @@
 
 <style scoped>
 /* === Общие стили и адаптивность === */
-
 .accounts-container {
   padding: 1px; /* Предотвращает схлопывание внешних отступов дочерних элементов */
   max-width: 100%;
@@ -384,34 +385,22 @@
   font-weight: 600;
 }
 
-.actions,
 .action-buttons {
   display: flex;
-  align-items: center;
-  justify-content: flex-end; /* Сохраняем выравнивание по правому краю для шапки */
-  gap: 10px;
-  white-space: nowrap;
-  height: 100%;
-}
-
-.accounts-table td.actions {
-  display: flex;
-  align-items: center;
-  justify-content: center; /* Центрируем кнопки в ячейке */
-  height: 100%;
-  padding: 5px 0;
-  white-space: nowrap; /* Предотвращаем перенос кнопок */
+  gap: 10px; /* Увеличен отступ между кнопками */
 }
 
 /* === Унифицированные стили для Action Button === */
 .action-button,
-:deep(.action-button) /* Для кнопок внутри DeleteAccount */ {
+:deep(.action-button) /* Для кнопок внутри DeleteAccount */
+{
   display: inline-flex;
-  align-items: center; /* Выравнивание содержимого кнопки по вертикали */
-  justify-content: center; /* Выравнивание содержимого кнопки по горизонтали */
+  align-items: center;
+  justify-content: center;
   width: 32px;   /* Стандартный размер */
   height: 32px;  /* Стандартный размер */
   padding: 0;
+  margin-right: 10px;
   box-sizing: border-box;
   border: 1px solid;
   border-radius: 5px; /* Чуть больше скругления */
@@ -425,23 +414,6 @@
   transition: background-color 0.2s, color 0.2s, border-color 0.2s;
   overflow: hidden;
   flex-shrink: 0; /* Предотвращает сжатие кнопок в flex контейнере */
-  margin: 0; /* Убираем внешние отступы */
-}
-
-/* Если кнопки находятся в ячейке таблицы */
-td.actions,
-td .action-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: center; /* Центрирование в ячейке */
-  height: 100%; /* Занимает всю высоту ячейки */
-  padding: 5px 0; /* Добавляем вертикальный отступ внутри ячейки */
-}
-
-/* Убираем отступ у последней кнопки в группе */
-.action-button:last-child,
-:deep(.action-button:last-child) {
-  margin-right: 0;
 }
 
 /* Цвета кнопок */
@@ -548,12 +520,10 @@ td .action-buttons {
 .account-actions {
   display: flex;
   justify-content: flex-end; /* Кнопки справа */
-  align-items: center; /* Выравнивание по вертикали */
   gap: 10px;
-  margin-top: 3px;
-  padding-top: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid #f1f1f1; /* Тонкая линия над кнопками */
-  height: 44px; /* Фиксированная высота для выравнивания */
 }
 
 /* --- История и Транзакции в мобильном виде --- */
@@ -647,12 +617,7 @@ td .action-buttons {
 
 .accounts-table th:nth-child(1) { text-align: left; }
 .accounts-table th:nth-child(n+2) { text-align: right; }
-.accounts-table th:last-child {
-  text-align: center;
-  /* Добавьте flex-basis, чтобы задать базовую ширину столбца */
-  flex-basis: 120px; /* Подберите подходящую ширину для двух кнопок */
-  width: 120px; /* Также задайте width для совместимости */
-}
+.accounts-table th:last-child { text-align: center; }
 
 .accounts-table .historical-cell { min-width: 100px; text-align: right; }
 .accounts-table .monthly-data .balance { font-weight: 500; }
@@ -811,26 +776,6 @@ td .action-buttons {
   .accounts-desktop {
     display: block; /* Показываем таблицу на десктопе */
   }
-
-  .accounts-desktop .accounts-table th:last-child {
-  text-align: center; /* Просто центрируем текст заголовка */
-  flex-basis: 120px; /* Сохраняем базовую ширину */
-  width: 120px; /* Для совместимости */
-}
-
-.accounts-desktop .accounts-table td.actions {
-  display: flex;
-  align-items: center;
-  justify-content: center; /* Центрируем кнопки */
-  height: 100%;
-  padding: 5px 0;
-  white-space: nowrap;
-}
-
-.accounts-desktop .accounts-table td.actions .action-buttons {
-  display: block; /* Возвращаем блочное поведение, чтобы не ломать центрирование */
-  text-align: center; /* Центрируем кнопки блочно */
-}
 
   .modal-content {
     width: auto; /* Позволяем модалке быть шире */
@@ -1145,21 +1090,64 @@ export default {
     /**
      * Загружает список счетов с сервера
      */
-    async loadAccounts() {
-      this.loading = true;
-      this.error = null;
-      
-      try {
-        const response = await axios.get('/api/accounts');
-        this.accounts = response.data;
-      } catch (error) {
-        console.error("Error loading accounts:", error);
-        this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
-        this.accounts = [];
-      } finally {
+     async loadAccounts() {
+    this.loading = true;
+    this.error = null;
+
+    // Добавляем таймаут для принудительного завершения загрузки
+    setTimeout(() => {
+      if (this.loading) {
+        console.log('Force ending loading state after timeout');
         this.loading = false;
+        this.error = 'Request timed out. Please check server connectivity.';
       }
+    }, 10000); // 10 секунд таймаут
+
+    try {
+      const startTime = performance.now();      
+      const response = await axios.get('/api/accounts');        
+      const endTime = performance.now();
+      console.log(`Запрос выполнен за ${(endTime - startTime).toFixed(2)}ms`);   
+      console.log("Ответ API:", response.status, response.statusText);     
+      if (response.data) {            
+        console.log(`Получено ${Array.isArray(response.data) ? response.data.length : 'не массив'} записей`);       
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log("Пример первой записи:", JSON.stringify(response.data[0], null, 2));        
+        } else {
+          console.log("Данные ответа:", response.data);        
+        }     
+      } else {
+        console.warn("Ответ API не содержит данных");     
+      }     
+      this.accounts = response.data;   
+    } catch (error) {
+      console.error("=== ОШИБКА при загрузке счетов ===");
+      console.error("Тип ошибки:", error.name);
+      console.error("Сообщение:", error.message);     
+      if (error.response) {
+        // Ошибка от сервера с ответом
+        console.error("Статус ответа:", error.response.status);
+        console.error("Данные ответа:", error.response.data);       
+      } else if (error.request) {
+        // Запрос был сделан, но ответ не получен
+        console.error("Запрос был отправлен, но ответ не получен");     
+      } else {
+        // Что-то пошло не так при настройке запроса
+        console.error("Ошибка при настройке запроса");     
+      }     
+      // Устанавливаем сообщение об ошибке для пользователя
+      this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
+      this.accounts = [];   
+    } finally {
+      this.loading = false;
+      console.log("Состояние компонента:", {
+        loading: this.loading,
+        error: this.error,
+        accountsCount: Array.isArray(this.accounts) ? this.accounts.length : 'не массив'   
+      });   
     }
+}
+
   },
   async created() {
     await this.loadAccounts();
