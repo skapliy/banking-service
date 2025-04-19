@@ -8,87 +8,70 @@
           id="name"
           v-model="name"
           required
-          class="form-control"
-        >
+          :disabled="loading"
+          placeholder="Например, Основной счет"
+        />
       </div>
-      
       <div class="form-group">
-        <label for="balance">Начальный баланс</label>
+        <label for="initial-balance">Начальный баланс (необязательно)</label>
         <input
           type="number"
-          id="balance"
-          v-model="balance"
+          id="initial-balance"
+          v-model.number="initialBalance"
           step="0.01"
-          required
-          class="form-control"
-        >
+          :disabled="loading"
+          placeholder="0.00"
+        />
       </div>
-      
-      <div class="form-group">
-        <label for="interest-rate">Процентная ставка (%)</label>
-        <input
-          type="number"
-          id="interest-rate"
-          v-model="interestRate"
-          step="0.01"
-          min="0"
-          max="100"
-          required
-          class="form-control"
-        >
-      </div>
-      
+
+      <p v-if="error" class="error-message">{{ error }}</p> <!-- Display error message -->
+
       <div class="form-actions">
-        <button type="submit" class="submit-button" :disabled="!isFormValid">
-          Создать
+        <button type="submit" :disabled="loading">
+          {{ loading ? 'Создание...' : 'Создать счет' }}
         </button>
-        <button type="button" class="cancel-button" @click="$emit('close')">
-          Отмена
-        </button>
+         <button type="button" @click="$emit('close')" :disabled="loading">Отмена</button>
       </div>
     </form>
   </div>
 </template>
 
 <script>
-import axios from '../axios-config';
+import axios from '../axios-config'; // Use configured instance
 
 export default {
   name: 'CreateAccount',
   data() {
     return {
       name: '',
-      balance: '',
-      interestRate: 0.0
+      initialBalance: 0,
+      loading: false,
+      error: null, // Add error state
     };
-  },
-  computed: {
-    isFormValid() {
-      return this.name && this.balance && this.interestRate !== '';
-    }
   },
   methods: {
     async submitAccount() {
-      try {
-        const accountData = {
-          name: this.name,
-          balance: parseFloat(this.balance),
-          interest_rate: parseFloat(this.interestRate)
-        };
+      this.loading = true;
+      this.error = null; // Reset error
 
+      const accountData = {
+        name: this.name,
+        initial_balance: this.initialBalance || 0, // Send 0 if null/undefined
+      };
+
+      try {
         await axios.post('/api/accounts', accountData);
-        this.$emit('account-created');
-        this.resetForm();
-      } catch (error) {
-        alert('Ошибка при создании счета: ' + (error.response?.data?.detail || error.message));
+        this.$emit('account-created'); // Emit success
+      } catch (err) {
+         console.error('Error creating account:', err); // Keep console error for debugging
+         // Set user-friendly error message
+         this.error = err.response?.data?.detail || err.message || 'Не удалось создать счет.';
+        // alert('Ошибка при создании счета: ' + (err.response?.data?.detail || err.message)); // Remove alert
+      } finally {
+        this.loading = false;
       }
     },
-    resetForm() {
-      this.name = '';
-      this.balance = '';
-      this.interestRate = '0.0';
-    }
-  }
+  },
 };
 </script>
 
@@ -151,56 +134,50 @@ input[type="date"].form-control {
   width: 100%;
 }
 
+.error-message {
+  color: #dc3545;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  padding: 10px 15px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+  font-size: 0.9em;
+  text-align: center;
+}
+
 .form-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
-  flex-wrap: wrap; /* Позволяет кнопкам переноситься на новую строку при необходимости */
-  justify-content: flex-end; /* Выравнивание кнопок по правому краю */
 }
 
-.submit-button, .cancel-button {
-  padding: 8px 16px;
+ .form-actions button {
+  padding: 8px 15px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  border: none;
-  flex: 0 0 auto; /* Предотвращает сжатие кнопок */
+  border: 1px solid transparent;
 }
 
-.submit-button {
-  background-color: #28a745;
+.form-actions button[type="submit"] {
+  background-color: #198754; /* Bootstrap success */
   color: white;
+  border-color: #198754;
 }
-
-.submit-button:hover {
-  background-color: #218838;
-}
-
-.submit-button:disabled {
+.form-actions button[type="submit"]:disabled {
   background-color: #6c757d;
+  border-color: #6c757d;
   cursor: not-allowed;
 }
 
-.cancel-button {
-  background-color: #6c757d;
+.form-actions button[type="button"] {
+  background-color: #6c757d; /* Bootstrap secondary */
   color: white;
+  border-color: #6c757d;
 }
-
-.cancel-button:hover {
-  background-color: #5a6268;
-}
-
-/* Медиа-запрос для маленьких экранов */
-@media (max-width: 480px) {
-  .form-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-  
-  .submit-button, .cancel-button {
-    width: 100%;
-    margin-bottom: 8px;
-  }
-}
+ .form-actions button[type="button"]:disabled {
+   opacity: 0.65;
+   cursor: not-allowed;
+ }
 </style>

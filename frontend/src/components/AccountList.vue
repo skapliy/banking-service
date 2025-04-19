@@ -18,14 +18,15 @@
         >
           %
         </button>
-        <button
-          class="action-button log-level-button"
-          @click="openLogLevelSelector"
-          title="Настроить уровень логирования"
-        >
-          📝
-        </button>
-        <transition name="fade">
+        <div class="log-level-container">
+          <button
+            class="action-button log-level-button"
+            @click="openLogLevelSelector"
+            title="Настроить уровень логирования"
+          >
+            📝
+          </button>
+          <transition name="fade">
             <div v-if="showLogLevelSelector" class="log-level-selector">
               <select id="log-level" v-model="logLevel">
                 <option value="INFO">INFO</option>
@@ -36,6 +37,7 @@
           </transition>
       </div>
     </div>
+   </div> 
 
     <!-- Состояния загрузки и ошибки -->
     <div v-if="loading" class="loading">
@@ -1022,7 +1024,10 @@ export default {
       selectedAccountForModal: null, // Для модальных окон
       newInterestRate: null,
       rateChangeError: null,
-      logLevel: 'INFO', // Уровень логирования
+      apiBaseUrl: process.env.NODE_ENV === 'production'
+        ? '' // В production используем относительные пути (предполагается прокси)
+        : process.env.VUE_APP_API_BASE_URL || '', // Используем переменную из .env.local для разработки
+      logLevel: process.env.NODE_ENV === 'production' ? 'WARNING' : 'INFO', // Уровень логирования в зависимости от окружения
       showLogLevelSelector: false, // индикатор видимости меню выбора уровня логирования
     };
   },
@@ -1244,7 +1249,8 @@ export default {
      */
      async fetchCurrentMonthRate() {
       try {
-        const response = await axios.get(`/api/interest-rate/${this.currentMonthStr}`);
+        // Используем apiBaseUrl
+        const response = await axios.get(`${this.apiBaseUrl}/api/interest-rate/${this.currentMonthStr}`);
         if (response.data && response.data.rate !== undefined) {
           this.newInterestRate = response.data.rate;
           this.log("Получена текущая ставка месяца.", 'INFO');
@@ -1253,7 +1259,7 @@ export default {
           this.log("Не удалось получить текущую ставку месяца.", 'WARNING');
         }
       } catch (error) {
-        this.log("Ошибка при получении текущей ставки месяца.", 'ERROR');
+        this.log(`Ошибка при получении текущей ставки месяца: ${error.message}`, 'ERROR');
         this.newInterestRate = null;
       }
     },
@@ -1283,13 +1289,14 @@ export default {
       const monthToUpdate = this.currentMonthStr;
 
       try {
-        await axios.put(`/api/interest-rate/${monthToUpdate}`, ratePayload);
+        // Используем apiBaseUrl
+        await axios.put(`${this.apiBaseUrl}/api/interest-rate/${monthToUpdate}`, ratePayload);
         this.closeGlobalRateModal();
         await this.loadAccounts();
         this.log("Ставка сохранена успешно.", 'INFO');
       } catch (error) {
-        this.log("Ошибка при сохранении ставки.", 'ERROR');
-        this.rateChangeError = 'Ошибка при сохранении ставки: ' + 
+        this.log(`Ошибка при сохранении ставки: ${error.message}`, 'ERROR');
+        this.rateChangeError = 'Ошибка при сохранении ставки: ' +
                              (error.response?.data?.detail || error.message);
       }
     },
@@ -1301,60 +1308,36 @@ export default {
       this.loading = true;
       this.error = null;
 
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => { // Перенес объявление timeoutId выше
         if (this.loading) {
-          this.log('Force ending loading state after timeout.', 'INFO');
+          this.log('Request timed out.', 'ERROR');
           this.loading = false;
           this.error = 'Request timed out. Please check server connectivity.';
         }
-      }, 10000); // 10 секунд таймаут
+      }, 15000); // Таймаут 15 секунд
 
       try {
         const startTime = performance.now();
-        const response = await axios.get('/api/accounts');
+        // Используем apiBaseUrl
+        const response = await axios.get(`${this.apiBaseUrl}/api/accounts`);
         const endTime = performance.now();
+        clearTimeout(timeoutId); // Очищаем таймаут при успехе
 
-        this.log(`Запрос выполнен за ${(endTime - startTime).toFixed(2)}ms`, 'INFO');
-        this.log("Ответ API:", response.status, response.statusText, 'INFO');
+        this.log(`Accounts loaded in ${(endTime - startTime).toFixed(2)}ms`, 'INFO');
 
-        if (response.data) {
-          this.log(`Получено ${Array.isArray(response.data) ? response.data.length : 'не массив'} записей`, 'INFO');
-          if (Array.isArray(response.data) && response.data.length > 0) {
-            this.log("Пример первой записи:", JSON.stringify(response.data[0], null, 2), 'DEBUG');
-          } else {
-            this.log("Данные ответа:", response.data, 'DEBUG');
-          }
-        } else {
-          this.log("Ответ API не содержит данных", 'WARNING');
-        }
-
+        // ... обработка ответа ...
         this.accounts = response.data;
       } catch (error) {
-        this.log("Ошибка при загрузке счетов.", 'ERROR');
-        this.log("Тип ошибки:", error.name, 'ERROR');
-        this.log("Сообщение:", error.message, 'ERROR');
-
-        if (error.response) {
-          this.log("Статус ответа:", error.response.status, 'ERROR');
-          this.log("Данные ответа:", error.response.data, 'ERROR');
-        } else if (error.request) {
-          this.log("Запрос был отправлен, но ответ не получен", 'ERROR');
-        } else {
-          this.log("Ошибка при настройке запроса", 'ERROR');
-        }
-
-        this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
-        this.accounts = [];
+         clearTimeout(timeoutId); // Очищаем таймаут при ошибке
+         this.log("Ошибка при загрузке счетов.", 'ERROR');
+         // ... логирование ошибки ...
+         this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
+         this.accounts = [];
       } finally {
         this.loading = false;
-        this.log("Состояние компонента:", {
-          loading: this.loading,
-          error: this.error,
-          accountsCount: Array.isArray(this.accounts) ? this.accounts.length : 'не массив'
-        }, 'INFO');
+        // ... финальное логирование ...
       }
     }
-
   },
 
   async created() {

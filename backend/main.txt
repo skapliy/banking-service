@@ -29,12 +29,22 @@ logger = logging.getLogger(__name__)
 
 # Конфигурация FastAPI и CORS
 app = FastAPI(title="Banking Service API", version="1.0.0")
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:8081",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",
+    # Добавьте IP-адрес вашего компьютера в локальной сети
+    "http://172.16.173.94:8080",  # Замените на ваш IP
+    # Если используете HTTPS
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # В production замените "*" на конкретные домены фронтенда
+    allow_origins=origins,  # Используем конкретный список вместо "*"
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Указываем конкретные методы
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # Конфигурация БД
@@ -764,19 +774,14 @@ async def set_interest_rate_for_month(month: str, rate_in: InterestRate):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200) # Рассчитывает и сохраняет конечный баланс и начисленные проценты для ВСЕХ счетов за указанный месяц
-
-@app.post("/api/admin/calculate-monthly-balances/{month}", status_code=200)
 async def calculate_and_store_monthly_balances(month: str):
     """
     Рассчитывает и сохраняет конечный баланс и начисленные проценты
     для ВСЕХ счетов за указанный месяц (YYYY-MM).
-    *** ТЕПЕРЬ ТАКЖЕ КАПИТАЛИЗИРУЕТ ПРОЦЕНТЫ: ***
-    - Добавляет начисленные проценты к основному балансу счета.
-    - Создает транзакцию для начисления процентов.
     Этот эндпоинт ДОЛЖЕН вызываться в начале следующего месяца
     (например, 1го апреля вызвать для марта /api/admin/calculate-monthly-balances/2025-03).
     """
-    logger.info(f"Starting calculation and capitalization of monthly balances for month: {month}")
+    logger.info(f"Starting calculation of monthly balances for month: {month}")
     try:
         # Валидация формата и проверка, что месяц не будущий
         target_month_date = datetime.strptime(month, '%Y-%m').date().replace(day=1)
@@ -785,43 +790,20 @@ async def calculate_and_store_monthly_balances(month: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM.")
 
-    # Словарь для русских названий месяцев (более надежно, чем locale)
-    months_ru = {
-        1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель', 5: 'Май', 6: 'Июнь',
-        7: 'Июль', 8: 'Август', 9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
-    }
-
     accounts_processed = 0
     accounts_failed = 0
-    accounts_capitalized = 0 # Счетчик для капитализированных счетов
-
     try:
         with get_db() as conn:
-            cursor = conn.execute("SELECT id FROM accounts") # Используем курсор для итерации
+            cursor = conn.execute("SELECT id FROM accounts")
             account_ids = [row['id'] for row in cursor.fetchall()]
             logger.info(f"Found {len(account_ids)} accounts to process for month {month}")
-
-            # Определяем год и номер месяца для комментариев и даты транзакции
-            try:
-                year, month_num = map(int, month.split('-'))
-                month_name_ru = months_ru.get(month_num, f'Месяц {month_num}')
-                # Дата для транзакции - первый момент следующего месяца
-                next_month_year = year + (month_num // 12)
-                next_month_num = (month_num % 12) + 1
-                interest_transaction_date = datetime(next_month_year, next_month_num, 1, 0, 0, 0)
-                interest_transaction_date_str = interest_transaction_date.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception as date_parse_err:
-                 logger.error(f"Error preparing date/comment parts for month {month}: {date_parse_err}", exc_info=True)
-                 raise HTTPException(status_code=500, detail="Internal error preparing data for interest capitalization.")
 
             for account_id in account_ids:
                 logger.debug(f"Processing account {account_id} for month {month}")
                 try:
-                    # 1. Рассчитываем проценты и конечный баланс (как раньше)
-                    # Убедимся, что функция возвращает Decimal
                     interest_accrued, end_balance = calculate_interest_for_month(conn, account_id, month)
 
-                    # 2. Сохраняем исторический результат в monthly_balances (как раньше)
+                    # Сохраняем результат в monthly_balances
                     conn.execute(
                         """
                         INSERT INTO monthly_balances (account_id, month, end_balance, interest_accrued)
@@ -832,57 +814,24 @@ async def calculate_and_store_monthly_balances(month: str):
                         """,
                         (account_id, month, end_balance, interest_accrued)
                     )
-                    logger.debug(f"Stored historical balance for {account_id}, month {month}. End Balance: {end_balance}, Interest: {interest_accrued}")
-
-                    # --- НАЧАЛО: Логика Капитализации ---
-                    if interest_accrued is not None and interest_accrued > Decimal('0.00'):
-                        logger.info(f"Capitalizing interest {interest_accrued:.2f} for account {account_id}, month {month}")
-
-                        # а. Генерируем ID для транзакции процентов
-                        interest_transaction_id = str(uuid.uuid4())
-
-                        # б. Формируем комментарий
-                        comment = f"Начисленные за {month_name_ru} {year} проценты"
-
-                        # в. Обновляем основной баланс счета (атомарно)
-                        conn.execute(
-                            "UPDATE accounts SET balance = balance + ? WHERE id = ?",
-                            (interest_accrued, account_id)
-                        )
-                        logger.debug(f"Updated account balance for {account_id} by +{interest_accrued:.2f}")
-
-                        # г. Создаем транзакцию начисления процентов
-                        conn.execute(
-                            """INSERT INTO transactions (id, account_id, amount, date, comment)
-                               VALUES (?, ?, ?, ?, ?)""",
-                            (interest_transaction_id, account_id, interest_accrued, interest_transaction_date_str, comment)
-                        )
-                        logger.debug(f"Created interest transaction {interest_transaction_id} for account {account_id}")
-                        accounts_capitalized += 1
-                    # --- КОНЕЦ: Логика Капитализации ---
-
                     accounts_processed += 1
+                    logger.debug(f"Successfully processed account {account_id} for {month}. End Balance: {end_balance}, Interest: {interest_accrued}")
 
                 except Exception as e:
                     accounts_failed += 1
-                    # Логируем ошибку, но НЕ прерываем весь процесс, переходим к следующему счету
-                    logger.error(f"Failed to process or capitalize interest for account {account_id}, month {month}: {e}", exc_info=True)
-                    # Важно: не откатываем транзакцию здесь, чтобы успешные записи для ДРУГИХ счетов сохранились
+                    logger.error(f"Failed to calculate balance for account {account_id}, month {month}: {e}", exc_info=True)
+                    # Продолжаем для других счетов, но логируем ошибку
 
-            # Коммитим все изменения (успешно обработанные счета) ПОСЛЕ цикла
-            conn.commit()
-            logger.info(f"Monthly balance calculation & capitalization finished for {month}. Processed: {accounts_processed}, Capitalized: {accounts_capitalized}, Failed: {accounts_failed}")
+            conn.commit() # Коммитим все успешные записи
+            logger.info(f"Monthly balance calculation finished for {month}. Processed: {accounts_processed}, Failed: {accounts_failed}")
             return {
-                "message": f"Monthly balances calculated and interest capitalized for {month}.",
+                "message": f"Monthly balances calculated for {month}.",
                 "processed": accounts_processed,
-                "capitalized": accounts_capitalized, # Добавили счетчик
                 "failed": accounts_failed
             }
 
     except Exception as e:
-        # Эта ошибка возникла до или во время получения списка счетов, или при подготовке дат/комментариев
-        logger.error(f"Critical error during monthly balance calculation/capitalization for {month}: {e}", exc_info=True)
-        # Здесь откат произойдет автоматически при выходе из contextmanager get_db, если conn.commit() не был вызван
+        logger.error(f"Critical error during monthly balance calculation for {month}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error during balance calculation for {month}")
 
 @app.put("/api/transactions/{transaction_id}", response_model=TransactionDB)
@@ -890,93 +839,101 @@ async def update_transaction_endpoint(transaction_id: str, transaction_update: T
     """Обновление существующей транзакции (сумма, дата, комментарий)."""
     logger.info(f"Attempting to update transaction: {transaction_id}")
 
-    # --- Валидация входных данных и подготовка значений ---
     if transaction_update.amount is None and transaction_update.date is None and transaction_update.comment is None:
         raise HTTPException(status_code=400, detail="No fields provided for update.")
 
-    new_amount_decimal: Optional[Decimal] = None
-    if transaction_update.amount is not None:
-        new_amount_decimal = transaction_update.amount.quantize(TWO_PLACES, ROUND_HALF_UP)
+    new_amount = transaction_update.amount
+    new_date_str = None
+    new_comment = transaction_update.comment # Может быть None
 
-    new_date_str_for_update: Optional[str] = None # Отформатированная дата для ЗАПИСИ в БД
+    # Валидация и форматирование новой даты, если она передана
     if transaction_update.date:
         try:
             new_date_part = datetime.strptime(transaction_update.date, '%Y-%m-%d').date()
             if new_date_part > date.today():
                  raise HTTPException(status_code=400, detail="Transaction date cannot be in the future")
-            # Форматируем для записи в БД (если у вас там datetime)
-            new_date_str_for_update = datetime.combine(new_date_part, datetime.min.time()).strftime('%Y-%m-%d %H:%M:%S')
+            # Для обновления сохраняем только дату, время оставим как есть или установим на начало дня?
+            # Давайте для простоты оставим время как есть в БД или установим 00:00:00
+            # Чтобы сохранить время, нужно его сначала прочитать.
+            # Пока просто обновим дату, время возьмем из текущего момента при конвертации
+            new_date_str = datetime.combine(new_date_part, datetime.min.time()).strftime('%Y-%m-%d %H:%M:%S')
+
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-
-    new_comment = transaction_update.comment # Может быть None или ""
 
     try:
         with get_db() as conn:
             cursor = conn.cursor()
 
-            # 1. Найти текущую транзакцию (чтобы получить account_id, old_amount и оригинальные date/comment)
+            # 1. Найти транзакцию и ее текущие значения
             cursor.execute("SELECT account_id, amount, date, comment FROM transactions WHERE id = ?", (transaction_id,))
-            current_transaction_row = cursor.fetchone()
-            if not current_transaction_row:
+            current_transaction = cursor.fetchone()
+            if not current_transaction:
                 raise HTTPException(status_code=404, detail="Transaction not found")
 
-            account_id = current_transaction_row['account_id']
-            old_amount = Decimal(current_transaction_row['amount'])
-            original_db_date_str = current_transaction_row['date'] # Сохраняем исходную дату/время из БД
-            original_db_comment = current_transaction_row['comment'] # Сохраняем исходный коммент
+            account_id = current_transaction['account_id']
+            old_amount = Decimal(current_transaction['amount'])
+            # Определяем итоговые значения для обновления
+            final_amount = new_amount.quantize(TWO_PLACES, ROUND_HALF_UP) if new_amount is not None else old_amount
+            # Используем новую дату если передана, иначе старую дату из БД
+            final_date_str = new_date_str if new_date_str is not None else current_transaction['date']
+            # Используем новый комментарий если передан (даже если пустая строка), иначе старый
+            final_comment = new_comment if new_comment is not None else current_transaction['comment']
 
-            # 2. Определить итоговые значения для записи в БД
-            final_amount = new_amount_decimal if new_amount_decimal is not None else old_amount
-            final_date_str_for_db = new_date_str_for_update if new_date_str_for_update is not None else original_db_date_str
-            final_comment = new_comment if new_comment is not None else original_db_comment
 
-            # 3. Рассчитать разницу в сумме для обновления баланса счета
+            # 2. Рассчитать разницу в сумме для обновления баланса счета
             amount_difference = final_amount - old_amount
-            logger.debug(f"Updating transaction {transaction_id}. Diff: {amount_difference}")
+            logger.debug(f"Updating transaction {transaction_id}. Old amount: {old_amount}, New amount: {final_amount}, Diff: {amount_difference}")
 
-            # --- Обновления в БД ---
-            # 4. Обновить транзакцию
+            # 3. Обновить транзакцию
             cursor.execute(
                 "UPDATE transactions SET amount = ?, date = ?, comment = ? WHERE id = ?",
-                (final_amount, final_date_str_for_db, final_comment, transaction_id)
+                (final_amount, final_date_str, final_comment, transaction_id)
             )
-            # 5. Обновить баланс счета, если сумма изменилась
+
+            # 4. Обновить баланс счета АТОМАРНО (если сумма изменилась)
             if amount_difference != Decimal('0.00'):
+                logger.debug(f"Updating account {account_id} balance by {amount_difference}")
                 cursor.execute(
                     "UPDATE accounts SET balance = balance + ? WHERE id = ?",
                     (amount_difference, account_id)
                 )
+
             conn.commit()
-            # --- Обновления в БД Завершены ---
 
-            logger.info(f"Transaction {transaction_id} updated successfully in DB.")
+            # 5. Вернуть обновленную транзакцию
+            cursor.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
+            updated_row = cursor.fetchone()
+            if not updated_row:
+                 logger.error(f"CRITICAL: Failed to fetch updated transaction {transaction_id} after successful update!") # Добавим лог
+                 raise HTTPException(status_code=500, detail="Failed to retrieve updated transaction.")
 
-            # --- Формирование Ответа --- <<< ИЗМЕНЕНИЕ ЛОГИКИ ЗДЕСЬ
-            # Не читаем заново из БД, а создаем объект Pydantic из известных данных
+            # ---> НАЧАЛО ОТЛАДКИ <---
+            logger.debug(f"Fetched updated row (type: {type(updated_row)}): {updated_row}")
             try:
-                # Создаем экземпляр TransactionDB напрямую
-                response_data = TransactionDB(
-                    id=transaction_id,           # ID из параметра пути
-                    account_id=account_id,       # ID счета, который мы получили ранее
-                    amount=final_amount,         # Итоговая сумма, которую записали в БД
-                    date=final_date_str_for_db,  # Итоговая дата (строка), которую записали
-                    comment=final_comment        # Итоговый комментарий, который записали
-                )
-                logger.debug(f"Constructed response object: {response_data}")
-                # Возвращаем готовый Pydantic объект, FastAPI его сериализует
-                return response_data
-            except Exception as response_build_err:
-                 # На случай ошибки сборки Pydantic объекта (хотя не должно)
-                 logger.error(f"Failed to build response object for transaction {transaction_id}: {response_build_err}", exc_info=True)
-                 raise HTTPException(status_code=500, detail="Internal error constructing transaction response.")
-            # --- Конец Формирования Ответа ---
+                # Попытка преобразовать в словарь и залогировать ключи/значения
+                account_dict = dict(updated_row)
+                logger.debug(f"Converted updated row to dict (keys: {list(account_dict.keys())}): {account_dict}") # Используем list(keys())
+            except Exception as dict_err:
+                 logger.error(f"Failed to convert updated row to dict: {dict_err}", exc_info=True)
+                 raise HTTPException(status_code=500, detail="Internal error converting updated transaction.")
+            # ---> КОНЕЦ ОТЛАДКИ <---
+
+            logger.info(f"Transaction {transaction_id} updated successfully, attempting to validate response.")
+            # Валидируем перед возвратом (оставляем как есть)
+            try:
+                validated_transaction = TransactionDB.model_validate(account_dict) # Используем dict
+                return validated_transaction
+            except Exception as validation_err:
+                 logger.error(f"Pydantic validation failed for updated transaction {transaction_id}: {validation_err}", exc_info=True)
+                 raise HTTPException(status_code=500, detail="Failed to validate updated transaction data for response.") # Эта ошибка и видна на фронте
 
     except HTTPException:
         raise # Пробрасываем HTTP ошибки
     except Exception as e:
         logger.error(f"Error updating transaction {transaction_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error during transaction update.")    
+        raise HTTPException(status_code=500, detail="Internal server error during transaction update.")
+    
 @app.delete("/api/transactions/{transaction_id}", status_code=200) # Можно 204 No Content, но 200 с сообщением тоже ок
 async def delete_transaction_endpoint(transaction_id: str):
     """Удаление транзакции и корректировка баланса счета."""
