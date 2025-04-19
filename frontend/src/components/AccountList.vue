@@ -18,24 +18,6 @@
         >
           %
         </button>
-        <div class="log-level-container">
-          <button
-            class="action-button log-level-button"
-            @click="openLogLevelSelector"
-            title="Настроить уровень логирования"
-          >
-            📝
-          </button>
-          <transition name="fade">
-            <div v-if="showLogLevelSelector" class="log-level-selector">
-              <select id="log-level" v-model="logLevel">
-                <option value="INFO">INFO</option>
-                <option value="DEBUG">DEBUG</option>
-                <option value="WARNING">WARNING</option>
-              </select>
-            </div>
-          </transition>
-      </div>
     </div>
    </div> 
 
@@ -755,32 +737,6 @@
   text-align: center;
 }
 
-.log-level-container {
-  display: inline-block;
-  position: relative;
-}
-
-.log-level-selector {
-  background-color: #ffffff;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  margin-top: 5px;
-  min-width: 100px;
-  padding: 5px;
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 100;
-}
-
-.log-level-selector select {
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  padding: 5px;
-  width: 100%;
-}
-
 .modal {
   align-items: center;
   background-color: rgba(0, 0, 0, 0.6); /* Чуть темнее фон */
@@ -1027,8 +983,6 @@ export default {
       apiBaseUrl: process.env.NODE_ENV === 'production'
         ? '' // В production используем относительные пути (предполагается прокси)
         : process.env.VUE_APP_API_BASE_URL || '', // Используем переменную из .env.local для разработки
-      logLevel: process.env.NODE_ENV === 'production' ? 'WARNING' : 'INFO', // Уровень логирования в зависимости от окружения
-      showLogLevelSelector: false, // индикатор видимости меню выбора уровня логирования
     };
   },
   computed: {
@@ -1109,23 +1063,6 @@ export default {
     }
   },
   methods: {
-    openLogLevelSelector() {
-      this.showLogLevelSelector = !this.showLogLevelSelector;
-    },
-
-    log(message, level) {
-      if (
-        (level === 'DEBUG' && this.logLevel !== 'DEBUG') ||
-        (level === 'WARNING' && this.logLevel === 'INFO')
-      ) return;
-
-      switch (level) {
-        case 'INFO': console.info(message); break;
-        case 'DEBUG': console.debug(message); break;
-        case 'WARNING': console.warn(message); break;
-        default: console.log(message);
-      }
-    },
       
     /**
      * Форматирует число как валюту без символа валюты.
@@ -1192,7 +1129,6 @@ export default {
       this.showingAddTransaction = true;
       this.showingCreateAccount = false;
       this.showingGlobalRateModal = false;
-      this.log("Открытие окна добавления транзакции.", 'INFO');
     },
     
     /**
@@ -1201,7 +1137,6 @@ export default {
      closeAddTransaction() {
       this.showingAddTransaction = false;
       this.selectedAccountForModal = null;
-      this.log("Закрытие окна добавления транзакции.", 'INFO');
     },
     
     /**
@@ -1211,7 +1146,6 @@ export default {
       this.showingCreateAccount = true;
       this.showingAddTransaction = false;
       this.showingGlobalRateModal = false;
-      this.log("Открытие окна создания счёта.", 'INFO');
     },
     
     /**
@@ -1219,7 +1153,6 @@ export default {
      */
      closeCreateAccount() {
       this.showingCreateAccount = false;
-      this.log("Закрытие окна создания счёта.", 'INFO');
     },
     
     /**
@@ -1231,7 +1164,6 @@ export default {
       this.showingGlobalRateModal = true;
       this.showingAddTransaction = false;
       this.showingCreateAccount = false;
-      this.log("Открытие окна изменения ставки.", 'INFO');
     },
     
     /**
@@ -1241,7 +1173,6 @@ export default {
       this.showingGlobalRateModal = false;
       this.newInterestRate = null;
       this.rateChangeError = null;
-      this.log("Закрытие окна изменения ставки.", 'INFO');
     },
     
     /**
@@ -1253,13 +1184,10 @@ export default {
         const response = await axios.get(`${this.apiBaseUrl}/api/interest-rate/${this.currentMonthStr}`);
         if (response.data && response.data.rate !== undefined) {
           this.newInterestRate = response.data.rate;
-          this.log("Получена текущая ставка месяца.", 'INFO');
         } else {
           this.newInterestRate = null;
-          this.log("Не удалось получить текущую ставку месяца.", 'WARNING');
         }
       } catch (error) {
-        this.log(`Ошибка при получении текущей ставки месяца: ${error.message}`, 'ERROR');
         this.newInterestRate = null;
       }
     },
@@ -1271,7 +1199,6 @@ export default {
       this.closeAddTransaction();
       this.closeCreateAccount();
       await this.loadAccounts();
-      this.log("Операция выполнена успешно.", 'INFO');
     },
     
     /**
@@ -1280,7 +1207,6 @@ export default {
      async saveGlobalInterestRate() {
       if (this.newInterestRate === null || this.newInterestRate === undefined || this.newInterestRate < 0) {
         this.rateChangeError = "Пожалуйста, введите корректную неотрицательную ставку.";
-        this.log("Неверная ставка введена.", 'WARNING');
         return;
       }
 
@@ -1293,9 +1219,7 @@ export default {
         await axios.put(`${this.apiBaseUrl}/api/interest-rate/${monthToUpdate}`, ratePayload);
         this.closeGlobalRateModal();
         await this.loadAccounts();
-        this.log("Ставка сохранена успешно.", 'INFO');
       } catch (error) {
-        this.log(`Ошибка при сохранении ставки: ${error.message}`, 'ERROR');
         this.rateChangeError = 'Ошибка при сохранении ставки: ' +
                              (error.response?.data?.detail || error.message);
       }
@@ -1310,7 +1234,9 @@ export default {
 
       const timeoutId = setTimeout(() => { // Перенес объявление timeoutId выше
         if (this.loading) {
-          this.log('Request timed out.', 'ERROR');
+          // {{ Remove this.log call }}
+          // this.log('Request timed out.', 'ERROR');
+          console.error('Request timed out.'); // Use console.error instead
           this.loading = false;
           this.error = 'Request timed out. Please check server connectivity.';
         }
@@ -1323,13 +1249,17 @@ export default {
         const endTime = performance.now();
         clearTimeout(timeoutId); // Очищаем таймаут при успехе
 
-        this.log(`Accounts loaded in ${(endTime - startTime).toFixed(2)}ms`, 'INFO');
+        // {{ Remove this.log call }}
+        // this.log(`Accounts loaded in ${(endTime - startTime).toFixed(2)}ms`, 'INFO');
+        console.info(`Accounts loaded in ${(endTime - startTime).toFixed(2)}ms`); // Use console.info instead
 
         // ... обработка ответа ...
         this.accounts = response.data;
       } catch (error) {
          clearTimeout(timeoutId); // Очищаем таймаут при ошибке
-         this.log("Ошибка при загрузке счетов.", 'ERROR');
+         // {{ Remove this.log call }}
+         // this.log("Ошибка при загрузке счетов.", 'ERROR');
+         console.error("Ошибка при загрузке счетов:", error); // Use console.error instead
          // ... логирование ошибки ...
          this.error = (error.response?.data?.detail || error.message || 'Неизвестная ошибка сети');
          this.accounts = [];
