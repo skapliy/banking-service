@@ -6,9 +6,12 @@ from typing import List, Dict, Optional
 class AccountBase(BaseModel):
     name: str
 
-class AccountCreate(AccountBase):
-    balance: Decimal # Начальный баланс
-    interest_rate: Optional[Decimal] = None # Опциональная ставка при создании
+# Add or update the AccountCreate model
+# Update the AccountCreate model to match the frontend's field names
+class AccountCreate(BaseModel):
+    name: str
+    initial_balance: Decimal  # Changed from 'balance' to 'initial_balance'
+    interest_rate: Optional[Decimal] = None
 
 class AccountUpdate(AccountBase):
     pass # Только имя можно менять
@@ -57,7 +60,25 @@ class CurrentPeriodData(BaseModel):
     projected_interest: Decimal
     projected_eom_balance: Decimal
 
+# Add this MonthlyDetail model to your models.py file
+# Place it with your other Pydantic models
+
+from decimal import Decimal
+from typing import Dict, Optional
+from pydantic import BaseModel, Field
+
+class MonthlyDetail(BaseModel):
+    """Monthly account details including balance and interest rate."""
+    closing_balance: Optional[Decimal] = None
+    interest_rate: Optional[Decimal] = None
+    interest_earned: Optional[Decimal] = None
+
+# Make sure your AccountDetails model includes the monthly_details field
 class AccountDetails(AccountDB):
-    current_interest_rate: Optional[Decimal] = None
-    previous_months: Dict[str, Optional[PreviousMonthData]] # {"YYYY-MM": PreviousMonthData | null}
+    """Extended account information with monthly details."""
+    monthly_details: Dict[str, MonthlyDetail] = Field(default_factory=dict)
     current_period: CurrentPeriodData
+    current_interest_rate: Optional[Decimal] = None # Add this field to hold the current rate
+    # Make these fields optional with default values
+    previous_months: Optional[Dict[str, Optional[PreviousMonthData]]] = Field(default_factory=dict)
+    current_period: Optional[CurrentPeriodData] = None

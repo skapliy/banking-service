@@ -3,13 +3,13 @@ import os
 import logging
 from contextlib import contextmanager
 from decimal import Decimal
-from .settings import settings # Import settings from the new file
+from .settings import settings
 
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = settings.database_url
 IS_SQLITE = DATABASE_URL.startswith("sqlite")
-TWO_PLACES = Decimal("0.01") # Keep precision constant here
+TWO_PLACES = Decimal("0.01")
 
 # Адаптеры для Decimal в SQLite
 def adapt_decimal(d: Decimal) -> str:
@@ -46,12 +46,15 @@ def init_db():
                 logger.info(f"Ensured database directory exists: {db_dir}")
             except OSError as e:
                  logger.error(f"Failed to create database directory '{db_dir}': {e}", exc_info=True)
-                 raise # Stop if we can't create the directory
-
-    connect_args = {"detect_types": sqlite3.PARSE_DECLTYPES}
+                 raise
 
     try:
-        with sqlite3.connect(db_path, **connect_args) as conn:
+        # Add check_same_thread=False to allow SQLite to be used across threads
+        with sqlite3.connect(
+            db_path, 
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            check_same_thread=False
+        ) as conn:
             cursor = conn.cursor()
             # Create Accounts Table
             cursor.execute("""
@@ -103,37 +106,57 @@ def init_db():
         logger.error(f"Unexpected error during DB initialization at path '{db_path}': {e}", exc_info=True)
         raise
 
-# <<< REMOVE THIS DECORATOR >>>
-# @contextmanager
 def get_db():
-    """Provides a database connection dependency for FastAPI."""
+    """FastAPI dependency to get a DB connection per request."""
     conn = None
-    db_path = None # Initialize db_path
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    
     try:
-        if IS_SQLITE:
-            db_path = DATABASE_URL.split("sqlite:///")[-1]
-            conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            conn.row_factory = sqlite3.Row # Use row_factory for dict-like access
-            logger.debug(f"SQLite DB Connection Opened to: {db_path}")
-            yield conn # FastAPI will inject this yielded value
-        else:
-            logger.error("Non-SQLite database connection not implemented yet.")
-            raise NotImplementedError("Database connection logic for non-SQLite DB is required.")
+        # Ensure directory exists
+        if db_path != ":memory:":
+            db_dir = os.path.dirname(db_path)
+            if db_dir and not os.path.exists(db_dir):
+                logger.info(f"Database directory '{db_dir}' not found, creating it.")
+                os.makedirs(db_dir, exist_ok=True)
+
+        logger.debug(f"Attempting to connect to SQLite DB at: {db_path}")
+        
+        # The critical fix: add check_same_thread=False to allow cross-thread usage
+        conn = sqlite3.connect(
+            db_path,
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            check_same_thread=False  # This is the key change
+        )
+        conn.row_factory = sqlite3.Row
+        logger.debug(f"SQLite DB Connection Opened to: {db_path}")
+        
+        yield conn
     except sqlite3.Error as e:
-        logger.error(f"Database connection/operation failed for path '{db_path}': {e}", exc_info=True)
-        # No need to rollback here, FastAPI handles errors before commit usually
-        # Re-raise as a standard exception or a custom DB exception if preferred
-        raise ConnectionError(f"Database error: {e}") from e
-    except Exception as e:
-        logger.error(f"An unexpected error occurred with DB connection/operation for path '{db_path}': {e}", exc_info=True)
-        # No need to rollback here either
-        raise ConnectionError(f"Internal server error: {e}") from e
+        logger.error(f"Error connecting to database at {db_path}: {e}", exc_info=True)
+        raise
     finally:
-        # FastAPI will execute this block after the request is handled
         if conn:
-            # Note: You usually commit within the endpoint logic *before* it returns.
-            # Rolling back here might discard intended changes if an error occurs *after* commit
-            # but before the request finishes. Consider if rollback is needed here.
-            # If endpoints handle their own commit/rollback, just closing is fine.
+            try:
+                conn.close()
+                logger.debug(f"SQLite DB Connection Closed for: {db_path}")
+            except sqlite3.Error as e:
+                logger.error(f"Error closing DB connection for {db_path}: {e}", exc_info=True)
+
+# Keep the contextmanager version if it's used elsewhere in your code
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections."""
+    conn = None
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    
+    try:
+        conn = sqlite3.connect(
+            db_path,
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            check_same_thread=False
+        )
+        conn.row_factory = sqlite3.Row
+        yield conn
+    finally:
+        if conn:
             conn.close()
-            logger.debug(f"SQLite DB Connection Closed for: {db_path}")

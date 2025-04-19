@@ -7,6 +7,7 @@ from typing import List, Dict, Optional
 
 # Third-party libraries
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import ValidationError
 
 # Project modules
 # Assuming models are in backend.models, services in backend.services, etc.
@@ -25,32 +26,33 @@ router = APIRouter(
 @router.post("", response_model=models.AccountDB, status_code=201) # Use router, relative path ""
 async def create_account(account_in: models.AccountCreate, conn: sqlite3.Connection = Depends(get_db)):
     """Создание нового банковского счета."""
-    logger.info(f"Attempting to create account: {account_in.name}")
-
-    # --- Проверки ---
-    if account_in.balance < 0:
-        raise HTTPException(status_code=400, detail="Initial balance cannot be negative")
-    if not account_in.name.strip():
-         raise HTTPException(status_code=400, detail="Account name cannot be empty")
-    # Проверка ставки (если она передана)
-    if account_in.interest_rate is not None and account_in.interest_rate < 0:
-         raise HTTPException(status_code=400, detail="Interest rate cannot be negative")
-
-    account_id = str(uuid.uuid4())
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    current_month_str = datetime.now().strftime('%Y-%m') # Текущий месяц для ставки
-    initial_balance = account_in.balance.quantize(TWO_PLACES, ROUND_HALF_UP)
-
     try:
-        # with get_db() as conn: # Remove with get_db(), use Depends
+        # Log the raw data before Pydantic validation
+        logger.info(f"Received account creation request: {account_in}")
+        
+        # --- Проверки ---
+        if account_in.initial_balance < 0:  # Changed from balance to initial_balance
+            raise HTTPException(status_code=400, detail="Initial balance cannot be negative")
+        if not account_in.name.strip():
+            raise HTTPException(status_code=400, detail="Account name cannot be empty")
+        # Проверка ставки (если она передана)
+        if account_in.interest_rate is not None and account_in.interest_rate < 0:
+            raise HTTPException(status_code=400, detail="Interest rate cannot be negative")
+            
+        account_id = str(uuid.uuid4())
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        current_month_str = datetime.now().strftime('%Y-%m')
+        initial_balance = account_in.initial_balance.quantize(TWO_PLACES, ROUND_HALF_UP)  # Changed from balance to initial_balance
+        
         cursor = conn.cursor()
 
-        # 1. Создаем счет (как и раньше)
+        # 1. Create account
         cursor.execute(
             "INSERT INTO accounts (id, name, balance) VALUES (?, ?, ?)",
             (account_id, account_in.name.strip(), initial_balance)
         )
-        # 2. Создаем транзакцию начального остатка (как и раньше)
+        
+        # 2. Create initial transaction
         transaction_id = str(uuid.uuid4())
         cursor.execute(
             """INSERT INTO transactions (id, account_id, amount, date, comment)
@@ -58,13 +60,10 @@ async def create_account(account_in: models.AccountCreate, conn: sqlite3.Connect
             (transaction_id, account_id, initial_balance, current_time, "Начальный остаток")
         )
 
-        # 3. ---> НОВОЕ: Устанавливаем процентную ставку на текущий месяц, если она передана <---
+        # 3. Set interest rate if provided
         if account_in.interest_rate is not None:
             rate_value = account_in.interest_rate.quantize(TWO_PLACES, ROUND_HALF_UP)
-            logger.info(f"Setting initial interest rate for account {account_id} for month {current_month_str} to {rate_value}%")
-            # IMPORTANT: This assumes interest_rates table uses only 'month' as primary/unique key.
-            # If rates are per-account, the schema and logic need changing.
-            # This will set/update the rate globally for the month.
+            logger.info(f"Setting initial interest rate for month {current_month_str} to {rate_value}%")
             cursor.execute(
                 """
                 INSERT INTO interest_rates (month, rate) VALUES (?, ?)
@@ -73,33 +72,25 @@ async def create_account(account_in: models.AccountCreate, conn: sqlite3.Connect
                 (current_month_str, rate_value)
             )
 
-        conn.commit() # Commit all changes
+        conn.commit()
 
         # Fetch and return the created account
         cursor.execute("SELECT id, name, balance FROM accounts WHERE id = ?", (account_id,))
         new_account_row = cursor.fetchone()
-        logger.info(f"Account created successfully in DB: {account_id}")
-
+        
         if new_account_row:
-            try:
-                account_dict = dict(new_account_row)
-                # Assuming AccountDB is your Pydantic model for DB representation
-                validated_account = models.AccountDB.model_validate(account_dict)
-                return validated_account
-            except Exception as validation_err:
-                 logger.error(f"Pydantic validation failed for new account {account_id}: {validation_err}", exc_info=True)
-                 raise HTTPException(status_code=500, detail="Failed to validate created account data for response.")
+            account_dict = dict(new_account_row)
+            validated_account = models.AccountDB.model_validate(account_dict)
+            return validated_account
         else:
-            logger.error(f"CRITICAL: Failed to fetch newly created account from DB: {account_id}")
             raise HTTPException(status_code=500, detail="Failed to retrieve created account after insertion.")
 
-    except sqlite3.IntegrityError as e:
-        logger.error(f"Database integrity error during account creation: {e}", exc_info=True)
-        # Consider more specific error messages based on constraint violation if possible
-        raise HTTPException(status_code=409, detail=f"Failed to create account. Possible duplicate or constraint violation.") # 409 Conflict might be better
+    except ValidationError as ve:
+        logger.error(f"Validation error: {ve}", exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Validation error: {ve}")
     except Exception as e:
-        logger.error(f"Unexpected error during account creation endpoint execution for {account_in.name}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error during account creation.")
+        logger.error(f"Error creating account: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating account: {e}")
 
 
 # --- Endpoint to Get List of Accounts with Details ---
@@ -139,20 +130,21 @@ async def get_accounts_list(conn: sqlite3.Connection = Depends(get_db)):
             placeholders = ','.join('?' * len(all_months)) # Create placeholders like ?,?,?
     
             # <<< FIX: Use the cursor to execute the query >>>
+            # In the get_accounts_list function, ensure we're properly fetching interest rates
             cursor.execute(f"SELECT month, rate FROM interest_rates WHERE month IN ({placeholders})", all_months)
             rates_raw = cursor.fetchall()
             interest_rates_dict = {row['month']: row['rate'] for row in rates_raw}
             logger.debug(f"Fetched interest rates for months: {list(interest_rates_dict.keys())}")
     
-            # <<< FIX: Use the cursor to execute the query >>>
-            cursor.execute(f"SELECT account_id, month, closing_balance FROM monthly_balances WHERE month IN ({placeholders})", all_months)
+            # <<< FIX: Use the cursor to execute the query and correct column name >>>
+            cursor.execute(f"SELECT account_id, month, end_balance FROM monthly_balances WHERE month IN ({placeholders})", all_months)
             balances_raw = cursor.fetchall()
             # Organize balances for easy lookup: {account_id: {month: balance}}
             monthly_balances_dict: Dict[str, Dict[str, Decimal]] = {}
             for row in balances_raw:
                 acc_id = row['account_id']
                 month = row['month']
-                balance = row['closing_balance']
+                balance = row['end_balance']  # Changed from 'closing_balance' to 'end_balance'
                 if acc_id not in monthly_balances_dict:
                     monthly_balances_dict[acc_id] = {}
                 monthly_balances_dict[acc_id][month] = balance
@@ -180,41 +172,60 @@ async def get_accounts_list(conn: sqlite3.Connection = Depends(get_db)):
                     # For simplicity, let's just report the stored balance and rate.
                     # If interest earned needs to be shown, it should ideally be stored too.
                     monthly_details[month_key] = models.MonthlyDetail(
-                        closing_balance=closing_balance,
+                        closing_balance=closing_balance,  # Keep this name as it matches your model
                         interest_rate=interest_rate
                         # interest_earned=... # Requires more complex logic or stored data
                     )
                     logger.debug(f"  Month {month_key}: Balance={closing_balance}, Rate={interest_rate}")
     
     
-                # Calculate details for the current month (using service function)
+                # Calculate details for the current month
                 current_month_rate = interest_rates_dict.get(current_month_str)
-                # <<< FIX: Pass the cursor, not the connection, if the service needs it >>>
-                # Or better, pass only the necessary data (account_id, current_month_str, conn/cursor)
-                # Assuming calculate_interest_for_month now accepts conn or cursor if needed
-                # Let's assume it only needs data for now, adjust if service needs DB access
-                # current_interest_earned = services.calculate_interest_for_month(
-                #     conn=conn, # Or cursor=cursor, or just account_id=account_id
-                #     account_id=account_id,
-                #     month_str=current_month_str,
-                #     current_rate_decimal=current_month_rate # Pass rate if available
-                # )
-                # Simplified: For display, show current balance and rate. Actual interest calculation
-                # might happen elsewhere (e.g., end-of-month process).
+                if current_month_rate is None:
+                    # If no rate is set for current month, fetch the most recent rate
+                    # Ensure cursor is defined in this scope if not already
+                    cursor = conn.cursor() # Make sure cursor is available
+                    cursor.execute("SELECT rate FROM interest_rates ORDER BY month DESC LIMIT 1")
+                    latest_rate_row = cursor.fetchone()
+                    # Use Decimal("0.00") as a default if no rates exist at all
+                    current_month_rate = Decimal(latest_rate_row['rate']) if latest_rate_row else Decimal("0.00")
+                    logger.debug(f"No rate explicitly set for {current_month_str}, using latest/default rate: {current_month_rate}")
+                else:
+                     # Ensure the fetched rate is Decimal
+                     current_month_rate = Decimal(current_month_rate)
+    
+    
                 monthly_details[current_month_str] = models.MonthlyDetail(
                     closing_balance=current_balance, # Show live balance for current month display
-                    interest_rate=current_month_rate,
-                    # interest_earned=current_interest_earned # If calculated
+                    interest_rate=current_month_rate
                 )
                 logger.debug(f"  Current Month {current_month_str}: LiveBalance={current_balance}, Rate={current_month_rate}")
     
+    
+                # Calculate projected interest for current month
+                projected_interest = Decimal("0.00")
+                # Ensure rate is not None before calculation
+                if current_month_rate is not None:
+                    projected_interest = services.calculate_interest_for_month(
+                        account_id=account_id,
+                        balance=current_balance,
+                        rate=current_month_rate, # Pass the Decimal rate
+                        month_str=current_month_str
+                    )
     
                 # Create the final AccountDetails object
                 account_detail = models.AccountDetails(
                     id=account_id,
                     name=account_name,
                     balance=current_balance, # Live balance
-                    monthly_details=monthly_details
+                    monthly_details=monthly_details,
+                    current_period=models.CurrentPeriodData(
+                        start_balance=current_balance, # Simplified start balance
+                        current_balance=current_balance,
+                        projected_interest=projected_interest,
+                        projected_eom_balance=current_balance + projected_interest
+                    ),
+                    current_interest_rate=current_month_rate # Assign the determined rate here
                 )
                 accounts_details.append(account_detail)
     

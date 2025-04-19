@@ -6,14 +6,9 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Manages application settings using Pydantic."""
     # Default to SQLite in the current directory for local dev
-    database_url: str = Field(default="sqlite:///./bank.db") # Keep only one definition
-    # Define allowed origins using a default list
-    allowed_origins: List[str] = Field(default=[ # Keep only one definition
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://172.16.173.94:8080"
-    ])
-    log_level: str = Field(default="INFO")
+    # Make sure this path is correct and accessible
+    database_url: str = Field(default="sqlite:///./banking.db")
+    log_level: str = Field(default="DEBUG") # <<< Временно установите DEBUG
     # Removed duplicate database_url and allowed_origins definitions from here
 
     class Config:

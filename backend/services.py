@@ -7,6 +7,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from .database import get_db, TWO_PLACES # Import DB context and constants
 from .models import PreviousMonthData, CurrentPeriodData # Import necessary models
 
+from .settings import logger
+
 logger = logging.getLogger(__name__)
 
 # --- Helper Functions ---
@@ -160,3 +162,32 @@ def calculate_interest_for_month(conn: sqlite3.Connection, account_id: str, mont
 # --- You would add more service functions here ---
 # e.g., functions to get detailed account data, process uploads, run reports etc.
 # These functions would encapsulate the logic currently in your endpoints.
+
+
+def calculate_interest_for_month(account_id: str, balance: Decimal, rate: Decimal, month_str: str) -> Decimal:
+    """Calculate projected interest for the given account and month."""
+    if rate is None or balance is None:
+        return Decimal("0.00")
+    
+    try:
+        # Parse the month string to get year and month
+        year, month = map(int, month_str.split('-'))
+        
+        # Get the number of days in the month
+        days_in_month = calendar.monthrange(year, month)[1]
+        
+        # Calculate daily interest rate (annual rate / 365)
+        daily_rate = rate / Decimal('100') / Decimal('365')
+        
+        # Calculate interest for the month (balance * daily rate * days in month)
+        interest = balance * daily_rate * Decimal(days_in_month)
+        
+        # Round to 2 decimal places
+        rounded_interest = interest.quantize(TWO_PLACES, ROUND_HALF_UP)
+        
+        logger.debug(f"Calculated interest for account {account_id}, month {month_str}: {rounded_interest}")
+        return rounded_interest
+    
+    except Exception as e:
+        logger.error(f"Error calculating interest: {e}", exc_info=True)
+        return Decimal("0.00")
